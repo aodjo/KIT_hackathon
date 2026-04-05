@@ -44,7 +44,7 @@ export default function Footer() {
 
             <div>
               <div className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">
-                Artifacts
+                Articles
               </div>
               <ul className="mt-4 space-y-2.5 text-[13px] text-ink-muted">
                 <li>
