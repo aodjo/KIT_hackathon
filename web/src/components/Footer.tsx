@@ -54,9 +54,9 @@ export default function Footer() {
                   </Link>
                 </li>
                 <li>
-                  <a href="#protege" className="hover:text-ink transition-colors">
+                  <Link to="/articles/what-is-protege-effect-234567" className="hover:text-ink transition-colors">
                     Protégé Effect
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
