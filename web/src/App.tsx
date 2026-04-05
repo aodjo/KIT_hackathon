@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
 import Landing from './pages/Landing';
+import Articles from './pages/Articles';
 import Article from './pages/Article';
 
 /**
@@ -10,6 +11,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/articles" element={<Articles />} />
+      <Route path="/articles/date/:date" element={<Articles />} />
       <Route path="/articles/:slug" element={<Article />} />
     </Routes>
   );

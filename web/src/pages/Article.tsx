@@ -47,11 +47,16 @@ export default function Article() {
             <nav className="flex items-center gap-2 text-[11px] text-ink-muted font-mono overflow-hidden" aria-label="breadcrumb">
               <Link to="/articles" className="hover:text-ink transition-colors shrink-0">Articles</Link>
               <span className="opacity-50 shrink-0">/</span>
-              <span className="shrink-0">{article.date}</span>
+              <Link to={`/articles/date/${article.date}`} className="hover:text-ink transition-colors shrink-0">
+                {article.date}
+              </Link>
               <span className="opacity-50 shrink-0">/</span>
               <span className="text-ink truncate">{article.slug}</span>
             </nav>
-            <h1 className="mt-6 font-display text-[44px] leading-[1.1] tracking-tight-display text-ink text-balance lg:text-[64px]">
+            <div className="mt-8 text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">
+              {article.category}
+            </div>
+            <h1 className="mt-1.5 font-display text-[44px] leading-[1.1] tracking-tight-display text-ink text-balance lg:text-[64px]">
               {article.title}
             </h1>
             {article.excerpt && (
