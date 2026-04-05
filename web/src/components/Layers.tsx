@@ -33,8 +33,9 @@ function WhisperVisual() {
         })}
       </g>
       <text
-        x="200"
+        x="310"
         y="105"
+        textAnchor="end"
         fontFamily="Instrument Serif, serif"
         fontSize="11"
         fontStyle="italic"
@@ -46,23 +47,31 @@ function WhisperVisual() {
   );
 }
 
-/** Connected node tree SVG */
+/** Concept trace path card */
 function TracerVisual() {
   return (
-    <svg viewBox="0 0 320 120" className="w-full h-auto" aria-hidden="true">
-      <g stroke="#0A0A0A" strokeWidth="1" fill="none" opacity="0.85">
-        <circle cx="260" cy="24" r="5" fill="#0A0A0A" />
-        <line x1="260" y1="29" x2="220" y2="52" />
-        <circle cx="220" cy="56" r="4" />
-        <line x1="220" y1="60" x2="180" y2="80" />
-        <circle cx="180" cy="84" r="4" />
-        <line x1="180" y1="88" x2="140" y2="104" />
-        <circle cx="140" cy="108" r="6" stroke="#8B6F47" strokeWidth="1.5" fill="#FAFAF7" />
-        <line x1="260" y1="29" x2="150" y2="100" strokeDasharray="2 3" opacity="0.35" />
-      </g>
-      <text x="16" y="28" fontFamily="Inter, sans-serif" fontSize="10" fill="#3A3A3A" letterSpacing="0.06em">증상</text>
-      <text x="16" y="112" fontFamily="Inter, sans-serif" fontSize="10" fill="#6B5435" letterSpacing="0.06em">원인</text>
-    </svg>
+    <div className="font-mono">
+      <div className="flex items-center justify-between mb-5">
+        <span className="text-[13px] uppercase tracking-[0.14em] text-ink-muted">오답 원인 역추적</span>
+      </div>
+      <svg viewBox="0 0 340 155" className="w-full h-auto" aria-hidden="true">
+        <line x1="20" y1="130" x2="260" y2="25" stroke="#C9C6BD" strokeWidth="1" strokeDasharray="3 3" />
+        <circle cx="20" cy="130" r="5" fill="#FAFAF7" stroke="#6B5435" strokeWidth="1.5" />
+        <text x="32" y="130" fontFamily="Instrument Serif, serif" fontSize="13" fontWeight="500" fill="#6B5435">비례</text>
+        <text x="64" y="130" fontFamily="Instrument Serif, serif" fontSize="9" fontWeight="500" fill="#6B5435" letterSpacing="0.12em">원인</text>
+        <text x="32" y="144" fontFamily="Instrument Serif, serif" fontSize="9" fill="#6B5435" opacity="0.65" letterSpacing="0.08em">중학교 1학년</text>
+        <circle cx="100" cy="95" r="4" fill="#FAFAF7" stroke="#C9C6BD" strokeWidth="1" />
+        <text x="112" y="95" fontFamily="Instrument Serif, serif" fontSize="13" fill="#3A3A3A">일차함수</text>
+        <text x="112" y="109" fontFamily="Instrument Serif, serif" fontSize="9" fill="#3A3A3A" opacity="0.5" letterSpacing="0.08em">중학교 2학년</text>
+        <circle cx="180" cy="60" r="4" fill="#FAFAF7" stroke="#C9C6BD" strokeWidth="1" />
+        <text x="192" y="60" fontFamily="Instrument Serif, serif" fontSize="13" fill="#3A3A3A">기울기</text>
+        <text x="192" y="74" fontFamily="Instrument Serif, serif" fontSize="9" fill="#3A3A3A" opacity="0.5" letterSpacing="0.08em">중학교 2학년</text>
+        <circle cx="260" cy="25" r="4" fill="#0A0A0A" />
+        <text x="272" y="25" fontFamily="Instrument Serif, serif" fontSize="13" fontWeight="500" fill="#0A0A0A">미적분</text>
+        <text x="312" y="25" fontFamily="Instrument Serif, serif" fontSize="9" fill="#3A3A3A" letterSpacing="0.12em">문제</text>
+        <text x="272" y="39" fontFamily="Instrument Serif, serif" fontSize="9" fill="#3A3A3A" opacity="0.5" letterSpacing="0.08em">고등학교 2학년</text>
+      </svg>
+    </div>
   );
 }
 
@@ -72,11 +81,11 @@ function MirrorVisual() {
     <svg viewBox="0 0 320 120" className="w-full h-auto" aria-hidden="true">
       <g stroke="#0A0A0A" strokeWidth="1" fill="none" opacity="0.9">
         <circle cx="100" cy="60" r="26" />
-        <text x="100" y="65" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="18" fill="#0A0A0A">학생</text>
+        <text x="100" y="64" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="13" fontWeight="500" fill="#0A0A0A">학생</text>
         <path d="M 130 54 L 186 54" strokeWidth="1.2" markerEnd="url(#arrow)" />
         <path d="M 186 66 L 130 66" strokeWidth="1.2" strokeDasharray="2 2" markerEnd="url(#arrowBack)" />
         <circle cx="216" cy="60" r="26" strokeDasharray="2 3" />
-        <text x="216" y="65" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="14" fontStyle="italic" fill="#6B5435">과거 자아</text>
+        <text x="216" y="64" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="10" fontWeight="500" fill="#6B5435">과거 자아</text>
       </g>
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
@@ -86,8 +95,8 @@ function MirrorVisual() {
           <path d="M 10 0 L 0 5 L 10 10 z" fill="#6B5435" />
         </marker>
       </defs>
-      <text x="158" y="46" textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="9" fill="#3A3A3A" letterSpacing="0.08em">가르침</text>
-      <text x="158" y="82" textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="9" fill="#6B5435" letterSpacing="0.08em">질문</text>
+      <text x="158" y="46" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="9" fill="#3A3A3A" letterSpacing="0.08em">가르침</text>
+      <text x="158" y="82" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="9" fill="#6B5435" letterSpacing="0.08em">질문</text>
     </svg>
   );
 }
@@ -107,14 +116,14 @@ const chapters: Chapter[] = [
     en: 'Misconception Tracer',
     ko: '오개념 원인 분석기',
     tag: '진단',
-    body: '오답의 원인을 수년 전 선수개념까지 역추적합니다. 지금 고2에서 틀린 미적분 문제가, 사실은 중3의 함수 개념에서 비롯된 것임을 지식 그래프 위에서 드러냅니다.',
+    body: '오답의 원인을 수년 전 선수개념까지 역추적합니다. 지금 고2에서 틀린 미적분 문제가, 사실은 중3의 함수 개념에서 비롯된 것임을 개념 지도 위에서 드러냅니다.',
     visual: <TracerVisual />,
   },
   {
     num: '03',
     en: 'MirrorMind',
     ko: '설명 학습 파트너',
-    tag: '치유',
+    tag: '학습',
     body: '학생의 과거 오답과 사고 흐름으로 학습된 AI가 "학생의 과거 자아"가 됩니다. 학생은 이 AI 후배에게 개념을 설명하며, 자신이 어디서 막히는지 스스로 깨닫게 됩니다.',
     visual: <MirrorVisual />,
   },
@@ -132,7 +141,7 @@ export default function Layers() {
         <div className="max-w-3xl">
           <span className="inline-flex items-center gap-2.5 text-clay-deep">
             <span className="w-1 h-1 rounded-full bg-clay" />
-            <span className="text-[13px] font-medium">세 개의 층</span>
+            <span className="text-[13px] font-medium">세 단계</span>
             <span className="text-[10px] uppercase tracking-[0.14em] font-mono opacity-60">3 Layers</span>
           </span>
           <h2 className="mt-8 font-display text-[44px] leading-[1.05] tracking-tight-display text-ink text-balance sm:text-[56px] lg:text-[64px]">
@@ -175,7 +184,7 @@ export default function Layers() {
 
               {/* right: body + visual */}
               <div className="lg:col-span-7 flex flex-col gap-8 lg:pt-8">
-                <p className="text-[16px] leading-[1.7] text-ink-muted text-pretty max-w-xl">
+                <p className="font-display text-[18px] leading-[1.6] text-ink-muted text-pretty max-w-xl">
                   {c.body}
                 </p>
                 <div className="mt-auto border border-grain bg-paper/60 rounded-sm p-6 lg:p-8">
