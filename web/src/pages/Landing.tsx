@@ -1,6 +1,7 @@
 import Navbar from '../components/Navbar';
 import Hero from '../components/Hero';
 import Layers from '../components/Layers';
+import Footer from '../components/Footer';
 
 /**
  * Landing page
@@ -14,6 +15,7 @@ export default function Landing() {
         <Hero />
         <Layers />
       </main>
+      <Footer />
     </div>
   );
 }
