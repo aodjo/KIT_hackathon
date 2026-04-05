@@ -20,13 +20,13 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           <a
             href="#signin"
-            className="hidden sm:inline-flex text-[13px] text-ink-muted hover:text-ink transition-colors px-3 py-2"
+            className="hidden sm:inline-flex items-center h-9 text-[13px] leading-none text-ink-muted hover:text-ink transition-colors px-3"
           >
             로그인
           </a>
           <a
             href="#start"
-            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-paper bg-ink hover:bg-ink-soft transition-colors px-4 py-2 rounded-full"
+            className="inline-flex items-center gap-1.5 h-9 text-[13px] leading-none font-medium text-paper bg-ink hover:bg-ink-soft transition-colors px-4 rounded-full"
           >
             시작하기
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
