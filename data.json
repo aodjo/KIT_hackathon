@@ -426,14 +426,20 @@
                     "id": "P04",
                     "requirements": [],
                     "curriculum": [
-                        "평균",
+                        "평균"
+                    ]
+                },
+                {
+                    "id": "P05",
+                    "requirements": [],
+                    "curriculum": [
                         "일이 일어날 가능성"
                     ]
                 }
             ],
             "6학년": [
                 {
-                    "id": "P05",
+                    "id": "P06",
                     "requirements": [],
                     "curriculum": [
                         "띠그래프",
@@ -631,7 +637,7 @@
         "자료와 가능성": {
             "1학년": [
                 {
-                    "id": "P06",
+                    "id": "P07",
                     "requirements": [],
                     "curriculum": [
                         "대푯값",
@@ -641,7 +647,7 @@
             ],
             "2학년": [
                 {
-                    "id": "P07",
+                    "id": "P08",
                     "requirements": [],
                     "curriculum": [
                         "경우의 수",
@@ -651,14 +657,14 @@
             ],
             "3학년": [
                 {
-                    "id": "P08",
+                    "id": "P09",
                     "requirements": [],
                     "curriculum": [
                         "산포도"
                     ]
                 },
                 {
-                    "id": "P09",
+                    "id": "P10",
                     "requirements": [],
                     "curriculum": [
                         "상자그림과 산점도"
@@ -746,7 +752,6 @@
             ],
             "기하": [],
             "확률과 통계": []
-
         },
         "변화와 관계": {
             "공통수학1": [
@@ -850,7 +855,7 @@
         "자료와 가능성": {
             "공통수학1": [
                 {
-                    "id": "P10",
+                    "id": "P11",
                     "requirements": [],
                     "curriculum": [
                         "합의 법칙과 곱의 법칙",
@@ -858,7 +863,7 @@
                     ]
                 },
                 {
-                    "id": "P11",
+                    "id": "P12",
                     "requirements": [],
                     "curriculum": [
                         "행렬과 그 연산"
@@ -872,7 +877,7 @@
             "기하": [],
             "확률과 통계": [
                 {
-                    "id": "P12",
+                    "id": "P13",
                     "requirements": [],
                     "curriculum": [
                         "순열과 조합",
@@ -880,7 +885,7 @@
                     ]
                 },
                 {
-                    "id": "P13",
+                    "id": "P14",
                     "requirements": [],
                     "curriculum": [
                         "확률의 개념과 활용",
@@ -888,7 +893,7 @@
                     ]
                 },
                 {
-                    "id": "P14",
+                    "id": "P15",
                     "requirements": [],
                     "curriculum": [
                         "확률분포",
