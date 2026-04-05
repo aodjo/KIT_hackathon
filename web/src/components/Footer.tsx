@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import Logo from './Logo';
 
 /**
@@ -48,9 +49,9 @@ export default function Footer() {
               </div>
               <ul className="mt-4 space-y-2.5 text-[13px] text-ink-muted">
                 <li>
-                  <a href="#research" className="hover:text-ink transition-colors">
-                    연구 근거
-                  </a>
+                  <Link to="/articles/how-does-echo-works-123983" className="hover:text-ink transition-colors">
+                    작동 방법
+                  </Link>
                 </li>
                 <li>
                   <a href="#protege" className="hover:text-ink transition-colors">
