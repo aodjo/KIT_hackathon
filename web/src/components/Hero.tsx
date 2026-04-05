@@ -4,8 +4,8 @@
  */
 export default function Hero() {
   return (
-    <section className="relative w-full overflow-hidden">
-      <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-24 pb-32 lg:pt-32 lg:pb-40">
+    <section className="relative w-full overflow-hidden min-h-[calc(100vh-4rem)] flex items-center">
+      <div className="mx-auto max-w-7xl px-6 lg:px-10 py-16 lg:py-20 w-full">
         {/* eyebrow badge */}
         <div className="flex items-center gap-2.5 mb-10">
           <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-clay-deep font-medium">
