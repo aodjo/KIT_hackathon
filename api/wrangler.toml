@@ -1,0 +1,20 @@
+name = "echo-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-20"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "development"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "echo-db"
+database_id = "PLACEHOLDER_REPLACE_AFTER_CREATE"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "echo-files"
+
+[observability]
+enabled = true
