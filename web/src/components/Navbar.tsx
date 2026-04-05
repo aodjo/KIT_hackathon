@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import Logo from './Logo';
 
 /**
@@ -13,7 +14,7 @@ export default function Navbar() {
         <nav className="hidden md:flex items-center gap-10 text-[13px] text-ink-muted">
           <a href="#concept" className="hover:text-ink transition-colors">컨셉</a>
           <a href="#features" className="hover:text-ink transition-colors">기능</a>
-          <a href="#research" className="hover:text-ink transition-colors">연구 근거</a>
+          <Link to="/articles" className="hover:text-ink transition-colors">아티클</Link>
           <a href="#demo" className="hover:text-ink transition-colors">데모</a>
         </nav>
 
