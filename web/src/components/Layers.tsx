@@ -83,16 +83,13 @@ function MirrorVisual() {
         <circle cx="100" cy="60" r="26" />
         <text x="100" y="64" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="13" fontWeight="500" fill="#0A0A0A">학생</text>
         <path d="M 130 54 L 186 54" strokeWidth="1.2" markerEnd="url(#arrow)" />
-        <path d="M 186 66 L 130 66" strokeWidth="1.2" strokeDasharray="2 2" markerEnd="url(#arrowBack)" />
+        <path d="M 186 66 L 130 66" strokeWidth="1.2" markerEnd="url(#arrow)" />
         <circle cx="216" cy="60" r="26" strokeDasharray="2 3" />
         <text x="216" y="64" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="10" fontWeight="500" fill="#6B5435">과거 자아</text>
       </g>
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A" />
-        </marker>
-        <marker id="arrowBack" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M 10 0 L 0 5 L 10 10 z" fill="#6B5435" />
         </marker>
       </defs>
       <text x="158" y="46" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="9" fill="#3A3A3A" letterSpacing="0.08em">가르침</text>
