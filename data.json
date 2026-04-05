@@ -200,7 +200,7 @@
             ],
             "6학년": [
                 {
-                    "id": "C04",
+                    "id": "C05",
                     "requirements": [],
                     "curriculum": [
                         "비와 비율",
@@ -485,28 +485,28 @@
         "변화와 관계": {
             "1학년": [
                 {
-                    "id": "C05",
+                    "id": "C06",
                     "requirements": [],
                     "curriculum": [
                         "문자의 사용과 식"
                     ]
                 },
                 {
-                    "id": "C06",
+                    "id": "C07",
                     "requirements": [],
                     "curriculum": [
                         "일차방정식"
                     ]
                 },
                 {
-                    "id": "C07",
+                    "id": "C08",
                     "requirements": [],
                     "curriculum": [
                         "좌표평면과 그래프"
                     ]
                 },
                 {
-                    "id": "C08",
+                    "id": "C09",
                     "requirements": [],
                     "curriculum": [
                         "정비례와 반비례"
@@ -515,14 +515,14 @@
             ],
             "2학년": [
                 {
-                    "id": "C09",
+                    "id": "C10",
                     "requirements": [],
                     "curriculum": [
                         "식의 계산"
                     ]
                 },
                 {
-                    "id": "C10",
+                    "id": "C11",
                     "requirements": [],
                     "curriculum": [
                         "일차부등식",
@@ -530,7 +530,7 @@
                     ]
                 },
                 {
-                    "id": "C11",
+                    "id": "C12",
                     "requirements": [],
                     "curriculum": [
                         "일차함수와 그 그래프",
@@ -540,21 +540,21 @@
             ],
             "3학년": [
                 {
-                    "id": "C12",
+                    "id": "C13",
                     "requirements": [],
                     "curriculum": [
                         "다항식의 곱셈과 인수분해"
                     ]
                 },
                 {
-                    "id": "C13",
+                    "id": "C14",
                     "requirements": [],
                     "curriculum": [
                         "이차방정식"
                     ]
                 },
                 {
-                    "id": "C14",
+                    "id": "C15",
                     "requirements": [],
                     "curriculum": [
                         "이차함수와 그 그래프"
@@ -751,7 +751,7 @@
         "변화와 관계": {
             "공통수학1": [
                 {
-                    "id": "C15",
+                    "id": "C16",
                     "requirements": [],
                     "curriculum": [
                         "다항식의 연산",
@@ -760,7 +760,7 @@
                     ]
                 },
                 {
-                    "id": "C16",
+                    "id": "C17",
                     "requirements": [],
                     "curriculum": [
                         "복소수와 이차방정식",
