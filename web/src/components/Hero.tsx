@@ -22,7 +22,7 @@ export default function Hero() {
         </h1>
 
         {/* subhead */}
-        <p className="mt-10 text-[17px] leading-[1.6] text-ink-muted max-w-2xl text-pretty">
+        <p className="mt-10 text-[17px] leading-[1.6] text-ink-muted font-display max-w-2xl text-pretty">
           Echo는 AI가 학생을 가르치는 도구가 아닙니다.
           학생의 과거 오답과 사고 흐름을 학습한 AI가 <em className="not-italic font-medium text-ink">학생의 과거 자아</em>가 되어,
           학생은 이 AI를 가르치며 자신의 메타인지를 훈련합니다.
@@ -55,7 +55,7 @@ export default function Hero() {
           <span className="font-display italic text-[13px] text-clay-deep shrink-0 pt-0.5">
             Note
           </span>
-          <p className="text-[13px] leading-[1.65] text-ink-muted">
+          <p className="text-[13px] leading-[1.65] font-display text-ink-muted">
             가르치는 행위는 학습 효과가 가장 강력한 행동입니다.
             Chase et al.(2009)의 Teachable Agents 연구는, 가르칠 대상이 있을 때 학습자가 개념을 훨씬 깊이 이해한다는 것을 입증했습니다.
             Echo는 이 효과를 생성형 AI로 재현합니다.

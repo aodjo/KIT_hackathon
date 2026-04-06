@@ -105,7 +105,7 @@ const chapters: Chapter[] = [
     en: 'Whisper',
     ko: '숨은 질문 탐지기',
     tag: '감지',
-    body: '학생이 질문하지 못하는 순간을 포착합니다. 스크롤 패턴, 체류 시간, 지웠다 다시 쓴 흔적, 오답의 결 — 이 미세 신호를 AI가 "학생이 지금 하고 싶었던 질문"으로 추론해 교강사에게 전달합니다.',
+    body: '학생이 질문하지 못하는 순간을 포착합니다. 스크롤 패턴, 체류 시간, 지웠다 다시 쓴 흔적, 오답의 결 — 이 미세 신호를 AI가 "학생이 지금 하고 싶었던 질문"으로 추론해 교사에게 전달합니다.',
     visual: <WhisperVisual />,
   },
   {
@@ -146,9 +146,9 @@ export default function Layers() {
             <br />
             이렇게 만들어집니다.
           </h2>
-          <p className="mt-8 text-[16px] leading-[1.65] text-ink-muted max-w-xl text-pretty">
+          <p className="mt-8 text-[16px] leading-[1.65] font-display text-ink-muted max-w-xl text-pretty">
             Echo는 세 개의 AI 에이전트가 순차적으로 작동하는 학습 파이프라인입니다.
-            감지하고, 진단하고, 치유합니다.
+            감지하고, 진단하고, 학습합니다.
           </p>
         </div>
 
