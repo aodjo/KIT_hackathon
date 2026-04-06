@@ -24,7 +24,7 @@
             "2학년": [
                 {
                     "id": "N03",
-                    "requirements": [],
+                    "requirements": ["N01"],
                     "curriculum": [
                         "세 자리 수",
                         "네 자리 수"
@@ -32,7 +32,7 @@
                 },
                 {
                     "id": "N04",
-                    "requirements": [],
+                    "requirements": ["N02"],
                     "curriculum": [
                         "받아올림, 받아내림이 있는 두 자리 수의 덧셈과 뺄셈"
                     ]
@@ -49,14 +49,14 @@
             "3학년": [
                 {
                     "id": "N06",
-                    "requirements": [],
+                    "requirements": ["N04"],
                     "curriculum": [
                         "세 자리 수의 덧셈과 뺄셈"
                     ]
                 },
                 {
                     "id": "N07",
-                    "requirements": [],
+                    "requirements": ["N05"],
                     "curriculum": [
                         "두 자리 수의 곱셈",
                         "(세 자리 수)x(한 자리 수)"
@@ -64,7 +64,7 @@
                 },
                 {
                     "id": "N08",
-                    "requirements": [],
+                    "requirements": ["N05"],
                     "curriculum": [
                         "나눗셈의 의미",
                         "(두 자리 수)÷(한 자리 수)",
@@ -82,7 +82,7 @@
             "4학년": [
                 {
                     "id": "N10",
-                    "requirements": [],
+                    "requirements": ["N03"],
                     "curriculum": [
                         "다섯 자리 수",
                         "십만, 백만, 천만",
@@ -91,7 +91,7 @@
                 },
                 {
                     "id": "N11",
-                    "requirements": [],
+                    "requirements": ["N07"],
                     "curriculum": [
                         "(세 자리 수)x(두 자리 수)",
                         "(두 자리 수)÷(두 자리 수)",
@@ -100,7 +100,7 @@
                 },
                 {
                     "id": "N12",
-                    "requirements": [],
+                    "requirements": ["N09"],
                     "curriculum": [
                         "분모가 같은 분수의 덧셈과 뺄셈",
                         "소수 두 자리 수, 소수 세 자리 수",
@@ -111,7 +111,7 @@
             "5학년": [
                 {
                     "id": "N13",
-                    "requirements": [],
+                    "requirements": ["N10"],
                     "curriculum": [
                         "수의 범위",
                         "어림하기 (올림, 버림, 반올림)"
@@ -119,14 +119,14 @@
                 },
                 {
                     "id": "N14",
-                    "requirements": [],
+                    "requirements": ["N06", "N11"],
                     "curriculum": [
                         "자연수의 혼합 계산"
                     ]
                 },
                 {
                     "id": "N15",
-                    "requirements": [],
+                    "requirements": ["N11", "N09"],
                     "curriculum": [
                         "약수와 배수",
                         "약분과 통분"
@@ -134,7 +134,7 @@
                 },
                 {
                     "id": "N16",
-                    "requirements": [],
+                    "requirements": ["N12"],
                     "curriculum": [
                         "분모가 다른 분수의 덧셈과 뺄셈"
                     ]
@@ -151,7 +151,7 @@
             "6학년": [
                 {
                     "id": "N18",
-                    "requirements": [],
+                    "requirements": ["N14", "N17"],
                     "curriculum": [
                         "분수의 나눗셈",
                         "소수의 나눗셈"
@@ -172,7 +172,7 @@
             "2학년": [
                 {
                     "id": "C02",
-                    "requirements": [],
+                    "requirements": ["C01"],
                     "curriculum": [
                         "여러 무늬와 모양, 덧셈표, 곱셈표, 생활에서 규칙 찾기"
                     ]
@@ -182,7 +182,7 @@
             "4학년": [
                 {
                     "id": "C03",
-                    "requirements": [],
+                    "requirements": ["C02"],
                     "curriculum": [
                         "수, 도형의 배열, 계산식에서 규칙 찾기",
                         "등호의 의미"
@@ -192,7 +192,7 @@
             "5학년": [
                 {
                     "id": "C04",
-                    "requirements": [],
+                    "requirements": ["C04"],
                     "curriculum": [
                         "규칙과 대응"
                     ]
@@ -201,7 +201,7 @@
             "6학년": [
                 {
                     "id": "C05",
-                    "requirements": [],
+                    "requirements": ["C05"],
                     "curriculum": [
                         "비와 비율",
                         "비례식과 비례배분"
@@ -243,21 +243,21 @@
             "2학년": [
                 {
                     "id": "D05",
-                    "requirements": [],
+                    "requirements": ["D01"],
                     "curriculum": [
                         "삼각형, 사각형, 원과 그 구성 요소"
                     ]
                 },
                 {
                     "id": "D06",
-                    "requirements": [],
+                    "requirements": ["D02"],
                     "curriculum": [
                         "여러 가지 모양으로 쌓기"
                     ]
                 },
                 {
                     "id": "D07",
-                    "requirements": [],
+                    "requirements": ["D03"],
                     "curriculum": [
                         "길이(cm, m)",
                         "길이의 합과 차"
@@ -265,7 +265,7 @@
                 },
                 {
                     "id": "D08",
-                    "requirements": [],
+                    "requirements": ["D04"],
                     "curriculum": [
                         "시각과 시간(시, 분)",
                         "하루의 시간, 달력"
@@ -275,7 +275,7 @@
             "3학년": [
                 {
                     "id": "D09",
-                    "requirements": [],
+                    "requirements": ["D05"],
                     "curriculum": [
                         "선분, 반직선, 직선",
                         "각, 직각",
@@ -291,14 +291,14 @@
                 },
                 {
                     "id": "D11",
-                    "requirements": [],
+                    "requirements": ["D07"],
                     "curriculum": [
                         "길이(mm, km)"
                     ]
                 },
                 {
                     "id": "D12",
-                    "requirements": [],
+                    "requirements": ["D03"],
                     "curriculum": [
                         "들이(L, mL)",
                         "들이의 합과 차",
@@ -308,7 +308,7 @@
                 },
                 {
                     "id": "D13",
-                    "requirements": [],
+                    "requirements": ["D08"],
                     "curriculum": [
                         "시간(초 단위까지)",
                         "시간의 합과 차"
@@ -318,7 +318,7 @@
             "4학년": [
                 {
                     "id": "D14",
-                    "requirements": [],
+                    "requirements": ["D14"],
                     "curriculum": [
                         "여러 가지 삼각형",
                         "수직과 평행",
@@ -335,7 +335,7 @@
                 },
                 {
                     "id": "D16",
-                    "requirements": [],
+                    "requirements": ["D09"],
                     "curriculum": [
                         "각도, 각도의 합과 차"
                     ]
@@ -344,21 +344,21 @@
             "5학년": [
                 {
                     "id": "D17",
-                    "requirements": [],
+                    "requirements": ["D15", "D14"],
                     "curriculum": [
                         "합동과 대칭"
                     ]
                 },
                 {
                     "id": "D18",
-                    "requirements": [],
+                    "requirements": ["D06"],
                     "curriculum": [
                         "직육면체"
                     ]
                 },
                 {
                     "id": "D19",
-                    "requirements": [],
+                    "requirements": ["D14"],
                     "curriculum": [
                         "다각형의 둘레와 넓이"
                     ]
@@ -367,7 +367,7 @@
             "6학년": [
                 {
                     "id": "D20",
-                    "requirements": [],
+                    "requirements": ["D18"],
                     "curriculum": [
                         "각기둥, 각뿔",
                         "원기둥, 원뿔, 구",
@@ -376,14 +376,14 @@
                 },
                 {
                     "id": "D21",
-                    "requirements": [],
+                    "requirements": ["D10"],
                     "curriculum": [
                         "원의 넓이"
                     ]
                 },
                 {
                     "id": "D22",
-                    "requirements": [],
+                    "requirements": ["D19"],
                     "curriculum": [
                         "직육면체의 부피와 겉넓이"
                     ]
@@ -405,7 +405,7 @@
             "3학년": [
                 {
                     "id": "P02",
-                    "requirements": [],
+                    "requirements": ["P01"],
                     "curriculum": [
                         "그림그래프"
                     ]
@@ -414,7 +414,7 @@
             "4학년": [
                 {
                     "id": "P03",
-                    "requirements": [],
+                    "requirements": ["P02"],
                     "curriculum": [
                         "막대그래프",
                         "꺾은선그래프"
@@ -440,7 +440,7 @@
             "6학년": [
                 {
                     "id": "P06",
-                    "requirements": [],
+                    "requirements": ["P03"],
                     "curriculum": [
                         "띠그래프",
                         "원그래프"
@@ -454,7 +454,7 @@
             "1학년": [
                 {
                     "id": "N19",
-                    "requirements": [],
+                    "requirements": ["N15"],
                     "curriculum": [
                         "소인수분해",
                         "최대공약수와 최소공배수"
@@ -462,7 +462,7 @@
                 },
                 {
                     "id": "N20",
-                    "requirements": [],
+                    "requirements": ["N13", "N16", "N18"],
                     "curriculum": [
                         "정수와 유리수"
                     ]
@@ -471,7 +471,7 @@
             "2학년": [
                 {
                     "id": "N21",
-                    "requirements": [],
+                    "requirements": ["N20"],
                     "curriculum": [
                         "유리수와 순환소수"
                     ]
@@ -480,7 +480,7 @@
             "3학년": [
                 {
                     "id": "N22",
-                    "requirements": [],
+                    "requirements": ["N21"],
                     "curriculum": [
                         "제곱근과 실수",
                         "근호를 포함한 식의 계산"
@@ -492,28 +492,28 @@
             "1학년": [
                 {
                     "id": "C06",
-                    "requirements": [],
+                    "requirements": ["C04"],
                     "curriculum": [
                         "문자의 사용과 식"
                     ]
                 },
                 {
                     "id": "C07",
-                    "requirements": [],
+                    "requirements": ["C06"],
                     "curriculum": [
                         "일차방정식"
                     ]
                 },
                 {
                     "id": "C08",
-                    "requirements": [],
+                    "requirements": ["P03"],
                     "curriculum": [
                         "좌표평면과 그래프"
                     ]
                 },
                 {
                     "id": "C09",
-                    "requirements": [],
+                    "requirements": ["C04", "C05"],
                     "curriculum": [
                         "정비례와 반비례"
                     ]
@@ -522,14 +522,14 @@
             "2학년": [
                 {
                     "id": "C10",
-                    "requirements": [],
+                    "requirements": ["C06"],
                     "curriculum": [
                         "식의 계산"
                     ]
                 },
                 {
                     "id": "C11",
-                    "requirements": [],
+                    "requirements": ["C07"],
                     "curriculum": [
                         "일차부등식",
                         "연립일차방정식"
@@ -537,7 +537,7 @@
                 },
                 {
                     "id": "C12",
-                    "requirements": [],
+                    "requirements": ["C08", "C09", "C11"],
                     "curriculum": [
                         "일차함수와 그 그래프",
                         "일차함수와 일차방정식의 관계"
@@ -547,21 +547,21 @@
             "3학년": [
                 {
                     "id": "C13",
-                    "requirements": [],
+                    "requirements": ["C10"],
                     "curriculum": [
                         "다항식의 곱셈과 인수분해"
                     ]
                 },
                 {
                     "id": "C14",
-                    "requirements": [],
+                    "requirements": ["C11", "C13"],
                     "curriculum": [
                         "이차방정식"
                     ]
                 },
                 {
                     "id": "C15",
-                    "requirements": [],
+                    "requirements": ["C12", "C14"],
                     "curriculum": [
                         "이차함수와 그 그래프"
                     ]
@@ -572,7 +572,7 @@
             "1학년": [
                 {
                     "id": "D23",
-                    "requirements": [],
+                    "requirements": ["D14", "D16", "D17"],
                     "curriculum": [
                         "기본 도형",
                         "작도와 합동"
@@ -580,14 +580,14 @@
                 },
                 {
                     "id": "D24",
-                    "requirements": [],
+                    "requirements": ["D14", "D16", "D19", "D21"],
                     "curriculum": [
                         "평면도형의 성질"
                     ]
                 },
                 {
                     "id": "D25",
-                    "requirements": [],
+                    "requirements": ["D20", "D22"],
                     "curriculum": [
                         "입체도형의 성질"
                     ]
@@ -596,7 +596,7 @@
             "2학년": [
                 {
                     "id": "D26",
-                    "requirements": [],
+                    "requirements": ["D23"],
                     "curriculum": [
                         "삼각형의 성질",
                         "사각형의 성질"
@@ -604,14 +604,14 @@
                 },
                 {
                     "id": "D27",
-                    "requirements": [],
+                    "requirements": ["D21"],
                     "curriculum": [
                         "도형의 닮음"
                     ]
                 },
                 {
                     "id": "D28",
-                    "requirements": [],
+                    "requirements": ["D26"],
                     "curriculum": [
                         "피타고라스 정리"
                     ]
@@ -620,14 +620,14 @@
             "3학년": [
                 {
                     "id": "D29",
-                    "requirements": [],
+                    "requirements": ["D26", "D27", "D28"],
                     "curriculum": [
                         "삼각비"
                     ]
                 },
                 {
                     "id": "D30",
-                    "requirements": [],
+                    "requirements": ["D24"],
                     "curriculum": [
                         "원의 성질"
                     ]
@@ -638,7 +638,7 @@
             "1학년": [
                 {
                     "id": "P07",
-                    "requirements": [],
+                    "requirements": ["P06", "P04"],
                     "curriculum": [
                         "대푯값",
                         "도수분포표와 상대도수"
@@ -648,7 +648,7 @@
             "2학년": [
                 {
                     "id": "P08",
-                    "requirements": [],
+                    "requirements": ["P05"],
                     "curriculum": [
                         "경우의 수",
                         "확률"
@@ -658,14 +658,14 @@
             "3학년": [
                 {
                     "id": "P09",
-                    "requirements": [],
+                    "requirements": ["P07"],
                     "curriculum": [
                         "산포도"
                     ]
                 },
                 {
                     "id": "P10",
-                    "requirements": [],
+                    "requirements": ["P09"],
                     "curriculum": [
                         "상자그림과 산점도"
                     ]
@@ -680,7 +680,7 @@
             "대수": [
                 {
                     "id": "N23",
-                    "requirements": [],
+                    "requirements": ["N22", "C10", "D33"],
                     "curriculum": [
                         "지수와 로그",
                         "지수함수와 로그함수"
@@ -688,7 +688,7 @@
                 },
                 {
                     "id": "N24",
-                    "requirements": [],
+                    "requirements": ["D29", "D33"],
                     "curriculum": [
                         "삼각함수",
                         "사인법칙과 코사인법칙"
@@ -698,7 +698,7 @@
             "미적분I": [
                 {
                     "id": "N25",
-                    "requirements": [],
+                    "requirements": ["D33"],
                     "curriculum": [
                         "함수의 극한",
                         "함수의 연속"
@@ -706,7 +706,7 @@
                 },
                 {
                     "id": "N26",
-                    "requirements": [],
+                    "requirements": ["N25"],
                     "curriculum": [
                         "미분계수",
                         "도함수",
@@ -715,7 +715,7 @@
                 },
                 {
                     "id": "N27",
-                    "requirements": [],
+                    "requirements": ["N26"],
                     "curriculum": [
                         "부정적분",
                         "정적분",
@@ -726,7 +726,7 @@
             "미적분II": [
                 {
                     "id": "N28",
-                    "requirements": [],
+                    "requirements": ["N25", "D34"],
                     "curriculum": [
                         "수열의 극한",
                         "급수"
@@ -734,7 +734,7 @@
                 },
                 {
                     "id": "N29",
-                    "requirements": [],
+                    "requirements": ["N23", "N26", "N24"],
                     "curriculum": [
                         "여러 가지 함수의 미분",
                         "여러 가지 미분법",
@@ -743,7 +743,7 @@
                 },
                 {
                     "id": "N30",
-                    "requirements": [],
+                    "requirements": ["N27", "N29"],
                     "curriculum": [
                         "여러 가지 함수의 적분법",
                         "정적분의 활용"
@@ -757,7 +757,7 @@
             "공통수학1": [
                 {
                     "id": "C16",
-                    "requirements": [],
+                    "requirements": ["C13"],
                     "curriculum": [
                         "다항식의 연산",
                         "나머지정리",
@@ -766,7 +766,7 @@
                 },
                 {
                     "id": "C17",
-                    "requirements": [],
+                    "requirements": ["C14", "C15", "C11", "C16"],
                     "curriculum": [
                         "복소수와 이차방정식",
                         "이차방정식과 이차함수",
@@ -786,7 +786,7 @@
             "공통수학2": [
                 {
                     "id": "D31",
-                    "requirements": [],
+                    "requirements": ["C12"],
                     "curriculum": [
                         "평면좌표",
                         "직선의 방정식",
@@ -804,7 +804,7 @@
                 },
                 {
                     "id": "D33",
-                    "requirements": [],
+                    "requirements": ["D32", "C12"],
                     "curriculum": [
                         "함수",
                         "유리함수와 무리함수"
@@ -814,7 +814,7 @@
             "대수": [
                 {
                     "id": "D34",
-                    "requirements": [],
+                    "requirements": ["D32"],
                     "curriculum": [
                         "등차수열과 등비수열",
                         "수열의 합",
@@ -827,14 +827,14 @@
             "기하": [
                 {
                     "id": "D35",
-                    "requirements": [],
+                    "requirements": ["D31"],
                     "curriculum": [
                         "이차곡선"
                     ]
                 },
                 {
                     "id": "D36",
-                    "requirements": [],
+                    "requirements": ["D31"],
                     "curriculum": [
                         "공간도형",
                         "공간좌표"
@@ -842,7 +842,7 @@
                 },
                 {
                     "id": "D37",
-                    "requirements": [],
+                    "requirements": ["D36"],
                     "curriculum": [
                         "백터의 연산",
                         "백터의 성분과 내적",
@@ -856,7 +856,7 @@
             "공통수학1": [
                 {
                     "id": "P11",
-                    "requirements": [],
+                    "requirements": ["P08"],
                     "curriculum": [
                         "합의 법칙과 곱의 법칙",
                         "순열과 조합"
@@ -878,7 +878,7 @@
             "확률과 통계": [
                 {
                     "id": "P13",
-                    "requirements": [],
+                    "requirements": ["P11"],
                     "curriculum": [
                         "순열과 조합",
                         "이항정리"
@@ -886,7 +886,7 @@
                 },
                 {
                     "id": "P14",
-                    "requirements": [],
+                    "requirements": ["P13", "P08"],
                     "curriculum": [
                         "확률의 개념과 활용",
                         "조건부확률"
@@ -894,7 +894,7 @@
                 },
                 {
                     "id": "P15",
-                    "requirements": [],
+                    "requirements": ["P14", "P08"],
                     "curriculum": [
                         "확률분포",
                         "통계적 추정"
