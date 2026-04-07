@@ -132,4 +132,38 @@ classes.get('/student/:studentId', async (c) => {
   return c.json({ classes: result.results });
 });
 
+/**
+ * POST /api/classes/:id/update
+ * Update class name.
+ * Body: { name }
+ */
+classes.post('/:id/update', async (c) => {
+  const id = c.req.param('id');
+  const { name } = await c.req.json<{ name: string }>();
+
+  await c.env.DB.prepare('UPDATE classes SET name = ? WHERE id = ?')
+    .bind(name, id)
+    .run();
+
+  return c.json({ ok: true });
+});
+
+/**
+ * POST /api/classes/:id/delete
+ * Delete a class and its members.
+ * Body: (none)
+ */
+classes.post('/:id/delete', async (c) => {
+  const id = c.req.param('id');
+
+  await c.env.DB.prepare('DELETE FROM class_members WHERE class_id = ?')
+    .bind(id)
+    .run();
+  await c.env.DB.prepare('DELETE FROM classes WHERE id = ?')
+    .bind(id)
+    .run();
+
+  return c.json({ ok: true });
+});
+
 export default classes;
