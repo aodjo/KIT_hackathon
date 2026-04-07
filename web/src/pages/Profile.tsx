@@ -137,7 +137,7 @@ export default function Profile() {
             <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
               아이디
             </label>
-            <div className="w-full border border-grain bg-grain/30 rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted">
+            <div className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted">
               {user.user_id}
             </div>
           </div>
@@ -146,7 +146,7 @@ export default function Profile() {
             <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
               이메일
             </label>
-            <div className="w-full border border-grain bg-grain/30 rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted">
+            <div className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted">
               {user.email}
             </div>
           </div>
@@ -155,7 +155,7 @@ export default function Profile() {
             <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
               역할
             </label>
-            <div className="w-full border border-grain bg-grain/30 rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted">
+            <div className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted">
               {user.role === 'teacher' ? '선생님' : '학생'}
             </div>
           </div>
