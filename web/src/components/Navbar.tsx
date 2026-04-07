@@ -24,7 +24,26 @@ export default function Navbar() {
         </nav>
 
         <div className="flex items-center gap-3">
-          {!user && (
+          {user ? (
+            <div className="flex items-center gap-2.5">
+              {user.picture ? (
+                <img
+                  src={user.picture}
+                  alt={user.name}
+                  className="w-7 h-7 rounded-full"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-grain flex items-center justify-center text-[11px] font-medium text-ink">
+                  {user.name.charAt(0)}
+                </div>
+              )}
+              <span className="text-[13px] text-ink font-medium tracking-widest">
+                {user.name}{' '}
+                <span className="text-ink-muted font-normal">({user.user_id})</span>
+              </span>
+            </div>
+          ) : (
             <button
               onClick={redirectToGoogle}
               className="inline-flex items-center gap-1.5 h-9 text-[13px] font-display leading-none font-medium text-paper bg-ink hover:bg-ink-soft transition-colors px-4 rounded-full cursor-pointer"

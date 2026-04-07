@@ -106,7 +106,7 @@ export async function exchangeCode(code: string): Promise<{
  */
 export async function registerUser(
   profile: GoogleProfile,
-  data: { role: string; userName: string; userId: string; className?: string },
+  data: { role: string; userName: string; userId: string; classCode?: string },
 ): Promise<StoredUser> {
   const res = await fetch(`${API}/api/auth/register`, {
     method: 'POST',

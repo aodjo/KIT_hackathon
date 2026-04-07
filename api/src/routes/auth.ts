@@ -146,7 +146,7 @@ auth.post('/callback', async (c) => {
 /**
  * POST /api/auth/register
  * Complete onboarding for a Google-authenticated user.
- * Body: { email, role, userName, userId, className? }
+ * Body: { email, role, userName, userId, classCode? }
  */
 auth.post('/register', async (c) => {
   const body = await c.req.json<{
@@ -156,7 +156,7 @@ auth.post('/register', async (c) => {
     role: string;
     userName: string;
     userId: string;
-    className?: string;
+    classCode?: string;
   }>();
 
   /** Prevent duplicate registration */
@@ -181,15 +181,33 @@ auth.post('/register', async (c) => {
       body.userId,
       body.role,
       body.picture ?? '',
-      body.className ?? '',
+      '',
     )
     .run();
 
+  /** Fetch the created user */
   const newUser = await c.env.DB.prepare(
     'SELECT * FROM users WHERE id = ?',
   )
     .bind(result.meta.last_row_id)
     .first<User>();
+
+  /** Join class if code provided */
+  if (body.classCode && newUser) {
+    const cls = await c.env.DB.prepare(
+      'SELECT id FROM classes WHERE code = ?',
+    )
+      .bind(body.classCode)
+      .first<{ id: number }>();
+
+    if (cls) {
+      await c.env.DB.prepare(
+        'INSERT OR IGNORE INTO class_members (class_id, user_id) VALUES (?, ?)',
+      )
+        .bind(cls.id, newUser.id)
+        .run();
+    }
+  }
 
   return c.json({ user: newUser, isNew: true });
 });

@@ -29,9 +29,8 @@ export default function Onboarding({
 
   /** Selected role */
   const [role, setRole] = useState<Role | null>(null);
-  
-
-
+  /** Class code input (student, optional) */
+  const [classCode, setClassCode] = useState('');
   /** User name input */
   const [userName, setUserName] = useState(() => {
     return profile.name.replace(/[^가-힣a-zA-Z\s]/g, '').trim().toLowerCase();
@@ -88,6 +87,7 @@ export default function Onboarding({
         role: role!,
         userName: userName.trim(),
         userId: userId.trim(),
+        ...(classCode.trim() ? { classCode: classCode.trim() } : {}),
       });
       saveUser(user);
       onComplete();
@@ -244,6 +244,23 @@ export default function Onboarding({
                     className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                   />
                   <p className="mt-1 text-[11px] text-ink-muted">영문 소문자, 숫자, 마침표만 사용 가능</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
+                    클래스 코드 <span className="text-ink-muted">(선택)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={classCode}
+                    onChange={(e) => {
+                      const v = e.target.value.toLowerCase();
+                      if (/^[a-z0-9]*$/.test(v) && v.length <= 8) setClassCode(v);
+                    }}
+                    placeholder="선생님이 알려준 코드 입력"
+                    maxLength={8}
+                    className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                  />
+                  <p className="mt-1 text-[11px] text-ink-muted">영문 소문자, 숫자만 사용 가능</p>
                 </div>
                 <button
                   onClick={handleSubmit}
