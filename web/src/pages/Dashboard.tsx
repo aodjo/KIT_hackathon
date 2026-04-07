@@ -41,6 +41,8 @@ export default function Dashboard() {
   const [newAnswer, setNewAnswer] = useState('');
   /** Show manage class modal */
   const [showManage, setShowManage] = useState(false);
+  /** Active manage tab */
+  const [manageTab, setManageTab] = useState<'info' | 'members'>('info');
   /** Editable class name in manage modal */
   const [editName, setEditName] = useState('');
   /** Class members */
@@ -96,6 +98,8 @@ export default function Dashboard() {
   const openManage = async () => {
     if (!selectedClass) return;
     setEditName(selectedClass.name);
+    setManageTab('info');
+    setShowDeleteConfirm(false);
     setShowManage(true);
     try {
       const res = await fetch(`${API}/api/classes/${selectedClass.id}`);
@@ -290,102 +294,138 @@ export default function Dashboard() {
       {/* manage class modal */}
       {showManage && selectedClass && (
         <div className="fixed inset-0 bg-ink/30 flex items-center justify-center z-50">
-          <div className="bg-paper rounded-lg p-8 w-full max-w-lg shadow-paper-lg">
-            <h2 className="font-display text-[22px] text-ink mb-6">클래스 관리</h2>
-
-            <div className="space-y-6">
-              {/* class name edit */}
-              <div>
-                <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
-                  클래스 이름
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveName();
-                    }}
-                    className="flex-1 border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
-                  />
-                  <button
-                    onClick={handleSaveName}
-                    disabled={savingName || editName.trim() === selectedClass.name}
-                    className="h-11 px-4 rounded-lg bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30"
-                  >
-                    {savingName ? '저장 중...' : '저장'}
-                  </button>
-                </div>
+          <div className="bg-paper rounded-lg w-full max-w-xl shadow-paper-lg flex overflow-hidden" style={{ height: '420px' }}>
+            {/* sidebar */}
+            <nav className="w-40 shrink-0 border-r border-grain py-6 px-3 flex flex-col justify-between">
+              <div className="space-y-1">
+                <button
+                  onClick={() => setManageTab('info')}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors cursor-pointer ${
+                    manageTab === 'info' ? 'bg-ink text-paper' : 'text-ink hover:bg-grain/50'
+                  }`}
+                >
+                  정보
+                </button>
+                <button
+                  onClick={() => setManageTab('members')}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors cursor-pointer ${
+                    manageTab === 'members' ? 'bg-ink text-paper' : 'text-ink hover:bg-grain/50'
+                  }`}
+                >
+                  멤버
+                </button>
               </div>
-
-              {/* members list */}
-              <div>
-                <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
-                  멤버 ({members.length}명)
-                </label>
-                {members.length === 0 ? (
-                  <p className="text-[13px] text-ink-muted">아직 멤버가 없습니다.</p>
-                ) : (
-                  <div className="border border-grain rounded-lg divide-y divide-grain max-h-48 overflow-y-auto">
-                    {members.map((m) => (
-                      <div key={m.id} className="flex items-center gap-3 px-4 py-3">
-                        {m.picture ? (
-                          <img src={m.picture} alt={m.name} className="w-7 h-7 rounded-full" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="w-7 h-7 rounded-full bg-grain flex items-center justify-center text-[12px] font-medium text-ink">
-                            {m.name.charAt(0)}
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[14px] text-ink font-medium">{m.name}</span>
-                          <span className="text-[12px] text-ink-muted font-mono ml-2">{m.user_id}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* delete class */}
-              <div className="border-t border-grain pt-5">
-                {!showDeleteConfirm ? (
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="text-[13px] text-red-500 hover:text-red-600 font-medium cursor-pointer transition-colors"
-                  >
-                    클래스 삭제
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <p className="text-[13px] text-red-500 flex-1">정말 삭제하시겠습니까? 모든 데이터가 삭제됩니다.</p>
-                    <button
-                      onClick={() => setShowDeleteConfirm(false)}
-                      className="h-9 px-4 rounded-full text-[13px] font-medium text-ink hover:bg-grain/50 transition-colors cursor-pointer"
-                    >
-                      취소
-                    </button>
-                    <button
-                      onClick={handleDeleteClass}
-                      className="h-9 px-4 rounded-full bg-red-500 text-paper font-medium text-[13px] hover:bg-red-600 transition-colors cursor-pointer"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end mt-6">
               <button
                 onClick={() => {
                   setShowManage(false);
                   setShowDeleteConfirm(false);
                 }}
-                className="h-10 px-5 rounded-full text-[13px] font-medium text-ink hover:bg-grain/50 transition-colors cursor-pointer"
+                className="w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium text-ink-muted hover:bg-grain/50 transition-colors cursor-pointer"
               >
                 닫기
               </button>
+            </nav>
+
+            {/* content */}
+            <div className="flex-1 p-8 overflow-y-auto">
+              {manageTab === 'info' ? (
+                <div className="space-y-6">
+                  <h2 className="font-display text-[20px] text-ink">클래스 정보</h2>
+
+                  {/* class name edit */}
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
+                      클래스 이름
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveName();
+                        }}
+                        className="flex-1 border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                      />
+                      <button
+                        onClick={handleSaveName}
+                        disabled={savingName || editName.trim() === selectedClass.name}
+                        className="h-11 px-4 rounded-lg bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30"
+                      >
+                        {savingName ? '저장 중...' : '저장'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* invite code */}
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
+                      초대 코드
+                    </label>
+                    <div className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted cursor-not-allowed">
+                      {selectedClass.code}
+                    </div>
+                  </div>
+
+                  {/* delete class */}
+                  <div className="border-t border-grain pt-5">
+                    {!showDeleteConfirm ? (
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="text-[13px] text-red-500 hover:text-red-600 font-medium cursor-pointer transition-colors"
+                      >
+                        클래스 삭제
+                      </button>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-[13px] text-red-500">정말 삭제하시겠습니까? 모든 데이터가 삭제됩니다.</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setShowDeleteConfirm(false)}
+                            className="h-9 px-4 rounded-full text-[13px] font-medium text-ink hover:bg-grain/50 transition-colors cursor-pointer"
+                          >
+                            취소
+                          </button>
+                          <button
+                            onClick={handleDeleteClass}
+                            className="h-9 px-4 rounded-full bg-red-500 text-paper font-medium text-[13px] hover:bg-red-600 transition-colors cursor-pointer"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <h2 className="font-display text-[20px] text-ink">
+                    멤버 <span className="text-ink-muted font-mono text-[14px]">{members.length}</span>
+                  </h2>
+
+                  {members.length === 0 ? (
+                    <p className="text-[13px] text-ink-muted">아직 멤버가 없습니다.</p>
+                  ) : (
+                    <div className="divide-y divide-grain">
+                      {members.map((m) => (
+                        <div key={m.id} className="flex items-center gap-3 py-3">
+                          {m.picture ? (
+                            <img src={m.picture} alt={m.name} className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-grain flex items-center justify-center text-[13px] font-medium text-ink">
+                              {m.name.charAt(0)}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[14px] text-ink font-medium">{m.name}</span>
+                            <span className="text-[12px] text-ink-muted font-mono ml-2">{m.user_id}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
