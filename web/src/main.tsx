@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './styles/global.css';
 
-/** React 마운트 루트 DOM 노드 */
+/** React mount root DOM node */
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('root element not found');
 
@@ -13,5 +13,5 @@ createRoot(rootEl).render(
     <BrowserRouter>
       <App />
     </BrowserRouter>
-  </StrictMode>
+  </StrictMode>,
 );

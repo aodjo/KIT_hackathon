@@ -1,11 +1,16 @@
 import { Link } from 'react-router-dom';
 import Logo from './Logo';
+import { redirectToGoogle, getStoredUser } from '../lib/auth';
 
 /**
- * Top navigation bar
+ * Top navigation bar.
+ *
  * @return nav element
  */
 export default function Navbar() {
+  /** Current user */
+  const user = getStoredUser();
+
   return (
     <header className="w-full border-b border-grain/80 bg-paper/80 backdrop-blur-md sticky top-0 z-50">
       <div className="mx-auto max-w-7xl px-6 lg:px-10 h-16 flex items-center justify-between">
@@ -19,21 +24,17 @@ export default function Navbar() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <a
-            href="#signin"
-            className="hidden sm:inline-flex items-center h-9 text-[13px] leading-none text-ink-muted hover:text-ink transition-colors px-3"
-          >
-            로그인
-          </a>
-          <a
-            href="#start"
-            className="inline-flex items-center gap-1.5 h-9 text-[13px] leading-none font-medium text-paper bg-ink hover:bg-ink-soft transition-colors px-4 rounded-full"
-          >
-            시작하기
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </a>
+          {!user && (
+            <button
+              onClick={redirectToGoogle}
+              className="inline-flex items-center gap-1.5 h-9 text-[13px] font-display leading-none font-medium text-paper bg-ink hover:bg-ink-soft transition-colors px-4 rounded-full cursor-pointer"
+            >
+              시작하기
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
     </header>

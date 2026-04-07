@@ -1,5 +1,8 @@
+import { redirectToGoogle } from '../lib/auth';
+
 /**
- * Landing hero section
+ * Landing hero section.
+ *
  * @return hero element
  */
 export default function Hero() {
@@ -29,16 +32,16 @@ export default function Hero() {
         </p>
 
         {/* CTA buttons */}
-        <div className="mt-12 flex flex-wrap items-center gap-4">
-          <a
-            href="#start"
-            className="inline-flex items-center gap-2 text-[14px] font-medium text-paper bg-ink hover:bg-ink-soft transition-colors px-6 py-3.5 rounded-full"
+        <div className="mt-12 font-display flex flex-wrap items-center gap-4">
+          <button
+            onClick={redirectToGoogle}
+            className="inline-flex items-center gap-2 text-[14px] font-medium text-paper bg-ink hover:bg-ink-soft transition-colors px-6 py-3.5 rounded-full cursor-pointer"
           >
-            데모 시작하기
+            시작하기
             <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
               <path d="M6 4l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-          </a>
+          </button>
           <a
             href="#concept"
             className="inline-flex items-center gap-2 text-[14px] font-medium text-ink hover:text-clay-deep transition-colors px-2 py-3.5"
