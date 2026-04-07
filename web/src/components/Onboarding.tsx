@@ -176,7 +176,7 @@ export default function Onboarding({
                     value={userName}
                     onChange={(e) => namePattern.test(e.target.value) && setUserName(e.target.value)}
                     placeholder="이름을 입력하세요"
-                    className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                    className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                   />
                   <p className="mt-1 text-[11px] text-ink-muted">한글, 영문 소문자만 사용 가능</p>
                 </div>
@@ -189,7 +189,7 @@ export default function Onboarding({
                     value={userId}
                     onChange={(e) => idPattern.test(e.target.value) && setUserId(e.target.value)}
                     placeholder="아이디를 입력하세요"
-                    className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                    className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                   />
                   <p className="mt-1 text-[11px] text-ink-muted">영문 소문자, 숫자, 마침표만 사용 가능</p>
                 </div>
@@ -228,7 +228,7 @@ export default function Onboarding({
                     value={userName}
                     onChange={(e) => namePattern.test(e.target.value) && setUserName(e.target.value)}
                     placeholder="이름을 입력하세요"
-                    className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                    className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                   />
                   <p className="mt-1 text-[11px] text-ink-muted">한글, 영문 소문자만 사용 가능</p>
                 </div>
@@ -241,7 +241,7 @@ export default function Onboarding({
                     value={userId}
                     onChange={(e) => idPattern.test(e.target.value) && setUserId(e.target.value)}
                     placeholder="아이디를 입력하세요"
-                    className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                    className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                   />
                   <p className="mt-1 text-[11px] text-ink-muted">영문 소문자, 숫자, 마침표만 사용 가능</p>
                 </div>
@@ -258,7 +258,7 @@ export default function Onboarding({
                     }}
                     placeholder="선생님이 알려준 코드 입력"
                     maxLength={8}
-                    className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                    className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                   />
                   <p className="mt-1 text-[11px] text-ink-muted">영문 소문자, 숫자만 사용 가능</p>
                 </div>

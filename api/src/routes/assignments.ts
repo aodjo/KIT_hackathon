@@ -11,7 +11,7 @@ const assignments = new Hono<{ Bindings: Env }>();
  */
 assignments.post('/', async (c) => {
   const body = await c.req.json<{
-    classId: number;
+    classId: string;
     teacherId: number;
     title: string;
     problem: string;

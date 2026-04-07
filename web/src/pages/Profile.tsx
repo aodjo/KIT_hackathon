@@ -128,7 +128,7 @@ export default function Profile() {
                   setDirty(e.target.value !== user.name);
                 }
               }}
-              className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+              className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
             />
             <p className="mt-1 text-[11px] text-ink-muted">한글, 영문 소문자만 사용 가능</p>
           </div>
@@ -137,7 +137,7 @@ export default function Profile() {
             <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
               아이디
             </label>
-            <div className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted cursor-not-allowed">
+            <div className="w-full border border-grain bg-grain/30 rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted cursor-not-allowed">
               {user.user_id}
             </div>
           </div>
@@ -146,7 +146,7 @@ export default function Profile() {
             <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
               이메일
             </label>
-            <div className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted cursor-not-allowed">
+            <div className="w-full border border-grain bg-grain/30 rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted cursor-not-allowed">
               {user.email}
             </div>
           </div>
@@ -155,7 +155,7 @@ export default function Profile() {
             <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
               역할
             </label>
-            <div className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted cursor-not-allowed">
+            <div className="w-full border border-grain bg-grain/30 rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted cursor-not-allowed">
               {user.role === 'teacher' ? '선생님' : '학생'}
             </div>
             <p className="mt-1 text-[11px] text-ink-muted tracking-wide">
@@ -195,8 +195,8 @@ export default function Profile() {
 
       {/* delete confirmation modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-ink/30 flex items-center justify-center z-50">
-          <div className="bg-paper rounded-lg p-8 w-full max-w-sm shadow-paper-lg">
+        <div className="fixed inset-0 bg-ink/30 flex items-center justify-center z-50" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="bg-paper rounded-lg p-8 w-full max-w-sm shadow-paper-lg" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-display text-[20px] text-ink mb-3">정말 탈퇴하시겠습니까?</h2>
             <p className="text-[13px] text-ink-muted mb-6">
               모든 데이터가 삭제되며 복구할 수 없습니다.

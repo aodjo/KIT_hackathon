@@ -6,7 +6,7 @@ import { getStoredUser } from '../lib/auth';
 /** Assignment record from API */
 type Assignment = {
   id: number;
-  class_id: number;
+  class_id: string;
   title: string;
   problem: string;
   answer: string;
@@ -232,8 +232,8 @@ export default function Dashboard() {
 
       {/* create assignment modal */}
       {showCreateAssignment && (
-        <div className="fixed inset-0 bg-ink/30 flex items-center justify-center z-50">
-          <div className="bg-paper rounded-lg p-8 w-full max-w-lg shadow-paper-lg">
+        <div className="fixed inset-0 bg-ink/30 flex items-center justify-center z-50" onClick={() => setShowCreateAssignment(false)}>
+          <div className="bg-paper rounded-lg p-8 w-full max-w-lg shadow-paper-lg" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-display text-[22px] text-ink mb-6">과제 출제</h2>
             <div className="space-y-4">
               <div>
@@ -245,7 +245,7 @@ export default function Dashboard() {
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder="예: 일차함수 기울기 구하기"
-                  className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                  className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                   autoFocus
                 />
               </div>
@@ -258,7 +258,7 @@ export default function Dashboard() {
                   onChange={(e) => setNewProblem(e.target.value)}
                   placeholder="문제 내용을 입력하세요"
                   rows={3}
-                  className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-3 font-mono text-[15px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
+                  className="w-full border border-grain rounded-lg px-4 py-3 font-mono text-[15px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
                 />
               </div>
               <div>
@@ -270,7 +270,7 @@ export default function Dashboard() {
                   value={newAnswer}
                   onChange={(e) => setNewAnswer(e.target.value)}
                   placeholder="정답을 입력하세요"
-                  className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                  className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                 />
               </div>
             </div>
@@ -293,8 +293,8 @@ export default function Dashboard() {
       )}
       {/* manage class modal */}
       {showManage && selectedClass && (
-        <div className="fixed inset-0 bg-ink/30 flex items-center justify-center z-50">
-          <div className="bg-paper rounded-lg w-full max-w-xl shadow-paper-lg flex overflow-hidden" style={{ height: '420px' }}>
+        <div className="fixed inset-0 bg-ink/30 flex items-center justify-center z-50" onClick={() => { setShowManage(false); setShowDeleteConfirm(false); }}>
+          <div className="bg-paper rounded-lg w-full max-w-xl shadow-paper-lg flex overflow-hidden" style={{ height: '420px' }} onClick={(e) => e.stopPropagation()}>
             {/* sidebar */}
             <nav className="w-40 shrink-0 border-r border-grain py-6 px-3 flex flex-col justify-between">
               <div className="space-y-1">
@@ -348,7 +348,7 @@ export default function Dashboard() {
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') handleSaveName();
                         }}
-                        className="flex-1 border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                        className="flex-1 border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                       />
                       <button
                         onClick={handleSaveName}
@@ -365,7 +365,7 @@ export default function Dashboard() {
                     <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
                       초대 코드
                     </label>
-                    <div className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted cursor-not-allowed">
+                    <div className="w-full border border-grain bg-grain/30 rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted cursor-not-allowed">
                       {selectedClass.code}
                     </div>
                   </div>

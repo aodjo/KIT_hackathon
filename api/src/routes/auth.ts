@@ -198,7 +198,7 @@ auth.post('/register', async (c) => {
       'SELECT id FROM classes WHERE code = ?',
     )
       .bind(body.classCode)
-      .first<{ id: number }>();
+      .first<{ id: string }>();
 
     if (cls) {
       await c.env.DB.prepare(

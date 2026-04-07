@@ -5,11 +5,24 @@ import type { Env } from '../db/types';
 const classes = new Hono<{ Bindings: Env }>();
 
 /**
+ * Generate random alphanumeric string.
+ *
+ * @param len desired length
+ * @return random string
+ */
+function randomId(len: number): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const arr = crypto.getRandomValues(new Uint8Array(len));
+  return Array.from(arr, (b) => chars[b % chars.length]).join('');
+}
+
+/**
  * Generate 6-char invite code.
+ *
  * @return random uppercase code
  */
 function generateCode(): string {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  return randomId(6).toUpperCase();
 }
 
 /**
@@ -23,20 +36,17 @@ classes.post('/', async (c) => {
     name: string;
   }>();
 
+  /** Random class ID */
+  const id = randomId(12);
   const code = generateCode();
 
-  const result = await c.env.DB.prepare(
-    'INSERT INTO classes (name, teacher_id, code) VALUES (?, ?, ?)',
+  await c.env.DB.prepare(
+    'INSERT INTO classes (id, name, teacher_id, code) VALUES (?, ?, ?, ?)',
   )
-    .bind(name, teacherId, code)
+    .bind(id, name, teacherId, code)
     .run();
 
-  return c.json({
-    id: result.meta.last_row_id,
-    name,
-    code,
-    teacherId,
-  });
+  return c.json({ id, name, code, teacherId });
 });
 
 /**

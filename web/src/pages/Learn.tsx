@@ -151,7 +151,7 @@ export default function Learn() {
                     if (e.key === 'Enter') handleSubmitAnswer();
                   }}
                   placeholder="답을 입력하세요"
-                  className="flex-1 border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                  className="flex-1 border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                 />
                 <button
                   onClick={handleSubmitAnswer}

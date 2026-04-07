@@ -7,7 +7,7 @@ const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
 
 /** Class item from API */
 type ClassItem = {
-  id: number;
+  id: string;
   name: string;
   code: string;
   member_count?: number;
@@ -27,7 +27,7 @@ export default function AppLayout({
   onSelectClass,
 }: {
   children: ReactNode;
-  selectedClassId?: number | null;
+  selectedClassId?: string | null;
   onSelectClass?: (cls: ClassItem) => void;
 }) {
   /** Current user */
@@ -162,8 +162,8 @@ export default function AppLayout({
 
       {/* create / join class modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-ink/30 flex items-center justify-center z-50">
-          <div className="bg-paper rounded-lg p-8 w-full max-w-sm shadow-paper-lg">
+        <div className="fixed inset-0 bg-ink/30 flex items-center justify-center z-50" onClick={() => { setShowCreate(false); setNewName(''); setJoinCode(''); }}>
+          <div className="bg-paper rounded-lg p-8 w-full max-w-sm shadow-paper-lg" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-display text-[20px] text-ink mb-6">
               {user?.role === 'teacher' ? '클래스 만들기' : '클래스 가입'}
             </h2>
@@ -180,7 +180,7 @@ export default function AppLayout({
                     if (e.key === 'Enter') handleCreateOrJoin();
                   }}
                   placeholder="예: 1학년 3반"
-                  className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                  className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                   autoFocus
                 />
               </div>
@@ -201,7 +201,7 @@ export default function AppLayout({
                     if (e.key === 'Enter') handleCreateOrJoin();
                   }}
                   placeholder="코드 입력"
-                  className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                  className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                   autoFocus
                 />
               </div>
