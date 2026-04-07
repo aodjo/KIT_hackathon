@@ -34,20 +34,21 @@ export default function Articles() {
       <main>
         <div className="mx-auto max-w-5xl px-6 lg:px-10 py-20 lg:py-28">
           <div className="mb-20">
-            <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">
-              Articles
-            </span>
+            <nav className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] font-medium font-mono text-clay-deep">
+              {dateFilter ? (
+                <>
+                  <Link to="/articles" className="hover:text-ink transition-colors">Articles</Link>
+                  <span className="opacity-50">/</span>
+                  <span className="text-ink">{dateFilter}</span>
+                </>
+              ) : (
+                <span>Articles</span>
+              )}
+            </nav>
             <h1 className="mt-4 font-display text-[56px] leading-[1.05] tracking-tight-display text-ink lg:text-[72px]">
-              {dateFilter ? `${dateFilter}의 아티클` : '아티클'}
+              아티클
             </h1>
-            {dateFilter ? (
-              <Link
-                to="/articles"
-                className="mt-6 inline-flex items-center gap-1.5 text-[13px] text-clay-deep hover:text-ink transition-colors font-mono"
-              >
-                ← 전체 아티클 보기
-              </Link>
-            ) : (
+            {!dateFilter && (
               <p className="mt-6 font-display text-[19px] leading-[1.55] text-ink-muted max-w-2xl">
                 Echo의 제품 철학, 리서치 근거, 개발 노트를 모았습니다.
               </p>
