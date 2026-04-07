@@ -5,13 +5,14 @@ import TextInput from "ink-text-input";
 import {
   loadCurriculumData,
   getSchoolLevels,
-  getDomains,
   getGrades,
+  getDomains,
   getConcepts,
 } from "../lib/curriculum.js";
 import { generateBatch } from "../lib/generator.js";
 import { GenerateProgress } from "./GenerateProgress.js";
 import type { FlatConcept, GenerationProgress, CurriculumData } from "../types.js";
+import { PINK, PEACH, CREAM, MUTED, LAVENDER } from "../lib/colors.js";
 
 /** Props for SelectGenerate component */
 interface SelectGenerateProps {
@@ -19,8 +20,8 @@ interface SelectGenerateProps {
   onBack: () => void;
 }
 
-/** Selection flow steps */
-type Step = "school" | "domain" | "grade" | "concept" | "input" | "generating" | "done";
+/** Selection flow: school -> grade -> domain -> concept -> input -> generating -> done */
+type Step = "school" | "grade" | "domain" | "concept" | "input" | "generating" | "done";
 
 /** Generic select item */
 interface SelectItem {
@@ -31,7 +32,7 @@ interface SelectItem {
 }
 
 /**
- * Selective generation screen - user picks school/domain/grade/concept.
+ * Selective generation screen - user picks school/grade/domain/concept.
  *
  * @param props - Component props
  * @returns React element
@@ -44,10 +45,10 @@ export function SelectGenerate({ onBack }: SelectGenerateProps): React.ReactElem
   const [step, setStep] = useState<Step>("school");
   /** Selected school level */
   const [school, setSchool] = useState("");
+  /** Selected grade/course */
+  const [grade, setGrade] = useState("");
   /** Selected domain */
   const [domain, setDomain] = useState("");
-  /** Selected grade */
-  const [grade, setGrade] = useState("");
   /** Selected concepts */
   const [selectedConcepts, setSelectedConcepts] = useState<FlatConcept[]>([]);
   /** Question count input */
@@ -66,25 +67,25 @@ export function SelectGenerate({ onBack }: SelectGenerateProps): React.ReactElem
     [data],
   );
 
-  /** Domain options for selected school */
-  const domainItems = useMemo<SelectItem[]>(
-    () => (school ? getDomains(data, school).map((d) => ({ label: d, value: d })) : []),
+  /** Grade options for selected school (across all domains) */
+  const gradeItems = useMemo<SelectItem[]>(
+    () => (school ? getGrades(data, school).map((g) => ({ label: g, value: g })) : []),
     [data, school],
   );
 
-  /** Grade options for selected school + domain */
-  const gradeItems = useMemo<SelectItem[]>(
+  /** Domain options for selected school + grade (only domains with content) */
+  const domainItems = useMemo<SelectItem[]>(
     () =>
-      school && domain
-        ? getGrades(data, school, domain).map((g) => ({ label: g, value: g }))
+      school && grade
+        ? getDomains(data, school, grade).map((d) => ({ label: d, value: d }))
         : [],
-    [data, school, domain],
+    [data, school, grade],
   );
 
-  /** Concept options for selected school + domain + grade */
+  /** Concept options for selected school + grade + domain */
   const conceptItems = useMemo<SelectItem[]>(
     () =>
-      school && domain && grade
+      school && grade && domain
         ? [
             { label: "전체 선택", value: "__all__" },
             ...getConcepts(data, school, domain, grade).map((c) => ({
@@ -93,7 +94,7 @@ export function SelectGenerate({ onBack }: SelectGenerateProps): React.ReactElem
             })),
           ]
         : [],
-    [data, school, domain, grade],
+    [data, school, grade, domain],
   );
 
   useInput((input, key) => {
@@ -102,9 +103,9 @@ export function SelectGenerate({ onBack }: SelectGenerateProps): React.ReactElem
     }
     if (key.escape) {
       if (step === "school") onBack();
-      else if (step === "domain") { setStep("school"); setSchool(""); }
-      else if (step === "grade") { setStep("domain"); setDomain(""); }
-      else if (step === "concept") { setStep("grade"); setGrade(""); }
+      else if (step === "grade") { setStep("school"); setSchool(""); }
+      else if (step === "domain") { setStep("grade"); setGrade(""); }
+      else if (step === "concept") { setStep("domain"); setDomain(""); }
       else if (step === "input") { setStep("concept"); }
     }
   });
@@ -133,64 +134,82 @@ export function SelectGenerate({ onBack }: SelectGenerateProps): React.ReactElem
   );
 
   /** Breadcrumb display */
-  const breadcrumb = [school, domain, grade].filter(Boolean).join(" > ");
+  const breadcrumb = [school, grade, domain].filter(Boolean).join(" > ");
+
+  /** Shared select indicator */
+  const indicator = ({ isSelected }: { isSelected: boolean }) => (
+    <Text color={PINK}>{isSelected ? " ❯ " : "   "}</Text>
+  );
+
+  /** Shared select item renderer */
+  const item = ({ isSelected, label }: { isSelected: boolean; label: string }) => (
+    <Text color={isSelected ? CREAM : MUTED}>{label}</Text>
+  );
 
   return (
     <Box flexDirection="column" padding={1}>
       <Box marginBottom={1}>
-        <Text bold color="cyan">선택 생성</Text>
+        <Text bold color={PINK}>선택 생성</Text>
         {breadcrumb && (
-          <Text dimColor> — {breadcrumb}</Text>
+          <Text color={MUTED}> — {breadcrumb}</Text>
         )}
       </Box>
 
       {step === "school" && (
         <>
-          <Text marginBottom={1}>학교급을 선택하세요:</Text>
+          <Text color={CREAM}>학교급을 선택하세요:</Text>
           <SelectInput
             items={schoolItems}
-            onSelect={(item: SelectItem) => { setSchool(item.value); setStep("domain"); }}
-          />
-        </>
-      )}
-
-      {step === "domain" && (
-        <>
-          <Text marginBottom={1}>영역을 선택하세요:</Text>
-          <SelectInput
-            items={domainItems}
-            onSelect={(item: SelectItem) => { setDomain(item.value); setStep("grade"); }}
+            onSelect={(i: SelectItem) => { setSchool(i.value); setStep("grade"); }}
+            indicatorComponent={indicator}
+            itemComponent={item}
           />
         </>
       )}
 
       {step === "grade" && (
         <>
-          <Text marginBottom={1}>학년을 선택하세요:</Text>
+          <Text color={CREAM}>학년/과정을 선택하세요:</Text>
           <SelectInput
             items={gradeItems}
-            onSelect={(item: SelectItem) => { setGrade(item.value); setStep("concept"); }}
+            onSelect={(i: SelectItem) => { setGrade(i.value); setStep("domain"); }}
+            indicatorComponent={indicator}
+            itemComponent={item}
+          />
+        </>
+      )}
+
+      {step === "domain" && (
+        <>
+          <Text color={CREAM}>영역을 선택하세요:</Text>
+          <SelectInput
+            items={domainItems}
+            onSelect={(i: SelectItem) => { setDomain(i.value); setStep("concept"); }}
+            indicatorComponent={indicator}
+            itemComponent={item}
           />
         </>
       )}
 
       {step === "concept" && (
         <>
-          <Text marginBottom={1}>개념을 선택하세요:</Text>
+          <Text color={CREAM}>개념을 선택하세요:</Text>
           <SelectInput
             items={conceptItems}
-            onSelect={(item: SelectItem) => {
-              if (item.value === "__all__") {
+            onSelect={(i: SelectItem) => {
+              if (i.value === "__all__") {
                 setSelectedConcepts(getConcepts(data, school, domain, grade));
               } else {
                 /** Matched concept */
                 const found = getConcepts(data, school, domain, grade).find(
-                  (c) => c.id === item.value,
+                  (c) => c.id === i.value,
                 );
                 if (found) setSelectedConcepts([found]);
               }
               setStep("input");
             }}
+            indicatorComponent={indicator}
+            itemComponent={item}
           />
         </>
       )}
@@ -198,12 +217,12 @@ export function SelectGenerate({ onBack }: SelectGenerateProps): React.ReactElem
       {step === "input" && (
         <>
           <Box marginBottom={1}>
-            <Text>
-              선택된 개념: <Text color="yellow">{selectedConcepts.length}</Text>개
+            <Text color={CREAM}>
+              선택된 개념: <Text color={LAVENDER}>{selectedConcepts.length}</Text>개
             </Text>
           </Box>
           <Box>
-            <Text>난이도별 문제 수: </Text>
+            <Text color={CREAM}>난이도별 문제 수: </Text>
             <TextInput
               value={countInput}
               onChange={setCountInput}
@@ -218,7 +237,7 @@ export function SelectGenerate({ onBack }: SelectGenerateProps): React.ReactElem
       )}
 
       <Box marginTop={1}>
-        <Text dimColor>ESC: 뒤로가기</Text>
+        <Text color={MUTED}>ESC: 뒤로가기</Text>
       </Box>
     </Box>
   );

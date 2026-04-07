@@ -5,6 +5,7 @@ import { loadCurriculumData, flattenConcepts } from "../lib/curriculum.js";
 import { generateBatch } from "../lib/generator.js";
 import { GenerateProgress } from "./GenerateProgress.js";
 import type { GenerationProgress } from "../types.js";
+import { PINK, CREAM, MUTED } from "../lib/colors.js";
 
 /** Props for BulkGenerate component */
 interface BulkGenerateProps {
@@ -73,13 +74,13 @@ export function BulkGenerate({ onBack }: BulkGenerateProps): React.ReactElement 
     return (
       <Box flexDirection="column" padding={1}>
         <Box marginBottom={1}>
-          <Text bold color="cyan">전체 생성</Text>
+          <Text bold color={PINK}>전체 생성</Text>
         </Box>
         <Box marginBottom={1}>
-          <Text dimColor>모든 개념에 대해 난이도별(상/중/하) 문제를 생성합니다.</Text>
+          <Text color={MUTED}>모든 개념에 대해 난이도별(상/중/하) 문제를 생성합니다.</Text>
         </Box>
         <Box>
-          <Text>난이도별 문제 수: </Text>
+          <Text color={CREAM}>난이도별 문제 수: </Text>
           <TextInput
             value={countInput}
             onChange={setCountInput}
@@ -87,7 +88,7 @@ export function BulkGenerate({ onBack }: BulkGenerateProps): React.ReactElement 
           />
         </Box>
         <Box marginTop={1}>
-          <Text dimColor>ESC: 뒤로가기</Text>
+          <Text color={MUTED}>ESC: 뒤로가기</Text>
         </Box>
       </Box>
     );

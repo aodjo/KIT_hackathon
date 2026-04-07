@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
 import type { Screen } from "../types.js";
 import { getQuestionCount } from "../lib/db.js";
+import { PINK, PEACH, MUTED, CREAM } from "../lib/colors.js";
 
 /** Props for MainMenu component */
 interface MainMenuProps {
@@ -20,9 +21,9 @@ interface MenuItem {
 
 /** Available menu items */
 const MENU_ITEMS: MenuItem[] = [
-  { label: "📦 전체 생성 (모든 개념)", value: "bulk" },
-  { label: "🔍 선택 생성 (개념 선택)", value: "select" },
-  { label: "🚪 종료", value: "exit" },
+  { label: "  전체 생성 (모든 개념)", value: "bulk" },
+  { label: "  선택 생성 (개념 선택)", value: "select" },
+  { label: "  종료", value: "exit" },
 ];
 
 /**
@@ -48,21 +49,30 @@ export function MainMenu({ onSelect }: MainMenuProps): React.ReactElement {
     <Box flexDirection="column" padding={1}>
       <Box
         marginBottom={1}
-        borderStyle="double"
-        borderColor="cyan"
+        borderStyle="round"
+        borderColor={PINK}
         paddingX={2}
         justifyContent="center"
       >
-        <Text bold color="cyan">수학 문제 출제 AI Agent</Text>
+        <Text bold color={CREAM}>수학 문제 출제 AI Agent</Text>
       </Box>
 
       <Box marginBottom={1}>
-        <Text dimColor>
-          DB 저장된 문제: <Text color="yellow">{count}</Text>개
+        <Text color={MUTED}>
+          DB 저장된 문제: <Text color={PEACH}>{count}</Text>개
         </Text>
       </Box>
 
-      <SelectInput items={MENU_ITEMS} onSelect={handleSelect} />
+      <SelectInput
+        items={MENU_ITEMS}
+        onSelect={handleSelect}
+        indicatorComponent={({ isSelected }) => (
+          <Text color={PINK}>{isSelected ? " ❯ " : "   "}</Text>
+        )}
+        itemComponent={({ isSelected, label }) => (
+          <Text color={isSelected ? CREAM : MUTED}>{label}</Text>
+        )}
+      />
     </Box>
   );
 }

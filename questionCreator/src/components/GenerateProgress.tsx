@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
 import type { GenerationProgress } from "../types.js";
+import { PINK, PEACH, CREAM, MUTED, LAVENDER } from "../lib/colors.js";
 
 /** Props for GenerateProgress component */
 interface GenerateProgressProps {
@@ -52,45 +53,47 @@ export function GenerateProgress({
       {!done ? (
         <>
           <Box marginBottom={1}>
-            <Text color="cyan">
+            <Text color={PINK}>
               <Spinner type="dots" />
             </Text>
-            <Text> 문제 생성 중...</Text>
+            <Text color={CREAM}> 문제 생성 중...</Text>
           </Box>
 
           <Box>
-            <Text>
-              {progressBar(progress.current, progress.total)}{" "}
-              <Text color="yellow">{pct}%</Text>{" "}
+            <Text color={PINK}>
+              {progressBar(progress.current, progress.total)}
+            </Text>
+            <Text color={PEACH}> {pct}% </Text>
+            <Text color={MUTED}>
               ({progress.current}/{progress.total})
             </Text>
           </Box>
 
           <Box marginTop={1}>
-            <Text dimColor>현재: {progress.currentLabel}</Text>
+            <Text color={MUTED}>현재: {progress.currentLabel}</Text>
           </Box>
 
           <Box marginTop={1}>
-            <Text>
-              생성된 문제: <Text color="green">{progress.questionsGenerated}</Text>개
+            <Text color={CREAM}>
+              생성된 문제: <Text color={LAVENDER}>{progress.questionsGenerated}</Text>개
             </Text>
           </Box>
         </>
       ) : (
         <>
           <Box marginBottom={1}>
-            <Text color="green" bold>
+            <Text color={PINK} bold>
               ✓ 생성 완료!
             </Text>
           </Box>
           <Box>
-            <Text>
-              총 <Text color="green" bold>{progress.questionsGenerated}</Text>개 문제가
+            <Text color={CREAM}>
+              총 <Text color={PEACH} bold>{progress.questionsGenerated}</Text>개 문제가
               DB에 저장되었습니다.
             </Text>
           </Box>
           <Box marginTop={1}>
-            <Text dimColor>Enter를 눌러 메인 메뉴로 돌아갑니다.</Text>
+            <Text color={MUTED}>Enter를 눌러 메인 메뉴로 돌아갑니다.</Text>
           </Box>
         </>
       )}

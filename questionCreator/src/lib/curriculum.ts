@@ -60,34 +60,50 @@ export function getSchoolLevels(data: CurriculumData): string[] {
 }
 
 /**
- * Get domains for a given school level.
+ * Get all unique grades/courses for a school level (across all domains).
  *
  * @param data - Curriculum data
  * @param schoolLevel - School level name
- * @returns Array of domain names
+ * @returns Array of grade names that have at least one concept
  */
-export function getDomains(data: CurriculumData, schoolLevel: string): string[] {
-  return Object.keys(data[schoolLevel] ?? {});
+export function getGrades(data: CurriculumData, schoolLevel: string): string[] {
+  /** All domains for this school level */
+  const domains = data[schoolLevel] ?? {};
+  /** Set to track unique grade names with content */
+  const gradeSet = new Set<string>();
+  /** Ordered list preserving first-seen order */
+  const ordered: string[] = [];
+
+  for (const gradeMap of Object.values(domains)) {
+    for (const [grade, concepts] of Object.entries(gradeMap)) {
+      if (concepts.length > 0 && !gradeSet.has(grade)) {
+        gradeSet.add(grade);
+        ordered.push(grade);
+      }
+    }
+  }
+
+  return ordered;
 }
 
 /**
- * Get grades for a given school level and domain.
+ * Get domains that have content for a given school level and grade.
  *
  * @param data - Curriculum data
  * @param schoolLevel - School level name
- * @param domain - Domain name
- * @returns Array of grade names (filtered to non-empty)
+ * @param grade - Grade name
+ * @returns Array of domain names (filtered to non-empty for that grade)
  */
-export function getGrades(
+export function getDomains(
   data: CurriculumData,
   schoolLevel: string,
-  domain: string,
+  grade: string,
 ): string[] {
-  /** Grade map for the given school/domain */
-  const gradeMap = data[schoolLevel]?.[domain] ?? {};
-  return Object.entries(gradeMap)
-    .filter(([, concepts]) => concepts.length > 0)
-    .map(([grade]) => grade);
+  /** All domains for this school level */
+  const domains = data[schoolLevel] ?? {};
+  return Object.entries(domains)
+    .filter(([, gradeMap]) => (gradeMap[grade] ?? []).length > 0)
+    .map(([domain]) => domain);
 }
 
 /**
