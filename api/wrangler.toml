@@ -9,7 +9,7 @@ ENVIRONMENT = "development"
 [[d1_databases]]
 binding = "DB"
 database_name = "echo-db"
-database_id = "PLACEHOLDER_REPLACE_AFTER_CREATE"
+database_id = "97038236-2fa7-48be-ba2c-ade8f715f934"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
