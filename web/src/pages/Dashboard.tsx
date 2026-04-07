@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { IoSettingsOutline } from 'react-icons/io5';
 import AppLayout, { type ClassItem } from '../components/AppLayout';
 import { getStoredUser } from '../lib/auth';
 
@@ -89,35 +90,42 @@ export default function Dashboard() {
               Dashboard
             </span>
             <h1 className="mt-2 font-display text-[32px] leading-[1.1] text-ink">
-              {user.name}님의 클래스
+              {selectedClass ? selectedClass.name : `${user.name}님의 클래스`}
             </h1>
+            {selectedClass && (
+              <p className="text-[12px] text-ink-muted font-mono mt-2">
+                초대 코드: <span className="text-ink font-medium">{selectedClass.code}</span>
+              </p>
+            )}
           </div>
+          {selectedClass && (
+            <div className="flex gap-2">
+              <button
+                className="h-10 px-4 rounded-full border border-grain text-ink-muted font-medium text-[13px] hover:border-ink hover:text-ink transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <IoSettingsOutline className="text-[15px]" />
+                관리
+              </button>
+              <button
+                onClick={() => setShowCreateAssignment(true)}
+                className="h-10 px-5 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors cursor-pointer"
+              >
+                <span className="text-[16px] leading-none relative top-[1px]">+</span>&ensp;과제 출제
+              </button>
+            </div>
+          )}
         </div>
 
         {/* main content */}
         {!selectedClass ? (
           <div className="border border-grain rounded-lg p-12 text-center">
-            <p className="text-[15px] text-ink-muted">
-              왼쪽에서 클래스를 선택하세요
+            <p className="text-[15px] text-ink-muted leading-relaxed">
+              클래스가 존재하지 않아요.<br />
+              사이드바에서 '+' 버튼을 눌러 클래스를 생성해 보세요.
             </p>
           </div>
         ) : (
           <>
-            {/* class header */}
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="font-display text-[24px] text-ink">{selectedClass.name}</h2>
-                <p className="text-[12px] text-ink-muted font-mono mt-1">
-                  초대 코드: <span className="text-ink font-medium">{selectedClass.code}</span>
-                </p>
-              </div>
-              <button
-                onClick={() => setShowCreateAssignment(true)}
-                className="h-10 px-5 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors cursor-pointer"
-              >
-                + 과제 출제
-              </button>
-            </div>
 
             {/* assignments list */}
             {assignments.length === 0 ? (

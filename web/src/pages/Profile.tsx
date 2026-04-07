@@ -158,6 +158,9 @@ export default function Profile() {
             <div className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink-muted cursor-not-allowed">
               {user.role === 'teacher' ? '선생님' : '학생'}
             </div>
+            <p className="mt-1 text-[11px] text-ink-muted tracking-wide">
+              {user.role === 'teacher' ? '선생님' : '학생'}이 아니신가요? 회원 탈퇴를 통해 다시 계정을 생성해 주세요.
+            </p>
           </div>
 
           {/* save button */}
