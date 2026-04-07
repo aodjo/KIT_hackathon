@@ -122,7 +122,7 @@ export default function Onboarding({
           <>
             <button
               onClick={() => handleSelect('teacher')}
-              className={`group cursor-pointer p-8 text-center transition-all duration-300 ${
+              className={`group cursor-pointer p-8 text-center border border-grain rounded-lg hover:border-ink transition-all duration-300 ${
                 stage === 'fading' ? 'opacity-0 scale-95' : 'opacity-100'
               }`}
             >
@@ -140,7 +140,7 @@ export default function Onboarding({
             </button>
             <button
               onClick={() => handleSelect('student')}
-              className={`group cursor-pointer p-8 text-center transition-all duration-300 ${
+              className={`group cursor-pointer p-8 text-center border border-grain rounded-lg hover:border-ink transition-all duration-300 ${
                 stage === 'fading' ? 'opacity-0 scale-95' : 'opacity-100'
               }`}
             >
