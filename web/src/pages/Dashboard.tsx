@@ -298,6 +298,9 @@ export default function Dashboard() {
             {/* sidebar */}
             <nav className="w-40 shrink-0 border-r border-grain py-6 px-3 flex flex-col justify-between">
               <div className="space-y-1">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono px-3 mb-2">
+                  관리
+                </div>
                 <button
                   onClick={() => setManageTab('info')}
                   className={`w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors cursor-pointer ${
