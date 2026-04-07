@@ -133,7 +133,7 @@ export default function Dashboard() {
                 Dashboard
               </span>
               <h1 className="mt-2 font-display text-[32px] leading-[1.1] text-ink">
-                {user.userName}님의 클래스
+                {user.name}님의 클래스
               </h1>
             </div>
             <button
