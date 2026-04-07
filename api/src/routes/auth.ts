@@ -230,4 +230,33 @@ auth.get('/me', async (c) => {
   return c.json({ user });
 });
 
+/**
+ * POST /api/auth/update
+ * Update user name.
+ * Body: { id, name }
+ */
+auth.post('/update', async (c) => {
+  const body = await c.req.json<{ id: number; name: string }>();
+  await c.env.DB.prepare('UPDATE users SET name = ? WHERE id = ?')
+    .bind(body.name, body.id)
+    .run();
+  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
+    .bind(body.id)
+    .first<User>();
+  return c.json({ user });
+});
+
+/**
+ * POST /api/auth/delete
+ * Delete user account.
+ * Body: { id }
+ */
+auth.post('/delete', async (c) => {
+  const body = await c.req.json<{ id: number }>();
+  await c.env.DB.prepare('DELETE FROM users WHERE id = ?')
+    .bind(body.id)
+    .run();
+  return c.json({ ok: true });
+});
+
 export default auth;

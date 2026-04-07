@@ -5,6 +5,7 @@ import Articles from './pages/Articles';
 import Article from './pages/Article';
 import Dashboard from './pages/Dashboard';
 import Learn from './pages/Learn';
+import Profile from './pages/Profile';
 import Navbar from './components/Navbar';
 import Onboarding from './components/Onboarding';
 import {
@@ -155,6 +156,7 @@ export default function App() {
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<RootPage />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/articles" element={<Articles />} />
         <Route path="/articles/date/:date" element={<Articles />} />
         <Route path="/articles/:slug" element={<Article />} />

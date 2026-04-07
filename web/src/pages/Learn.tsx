@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import Navbar from '../components/Navbar';
+import AppLayout from '../components/AppLayout';
 
 /** Chat message author role */
 type Role = 'ai' | 'student';
@@ -104,9 +104,8 @@ export default function Learn() {
   const isCorrect = submittedAnswer === problem.answer;
 
   return (
-    <div className="min-h-screen bg-paper-grain flex flex-col">
-      <Navbar />
-      <main className="flex-1 flex flex-col">
+    <AppLayout>
+      <div className="flex-1 flex flex-col">
         <div className="mx-auto w-full max-w-3xl px-6 lg:px-10 py-10 flex-1 flex flex-col">
           <div className="mb-10 flex items-end justify-between gap-6">
             <div>
@@ -229,7 +228,7 @@ export default function Learn() {
             </>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }
