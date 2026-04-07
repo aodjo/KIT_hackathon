@@ -30,8 +30,7 @@ export default function Onboarding({
   /** Selected role */
   const [role, setRole] = useState<Role | null>(null);
   
-  /** Class name input (teacher only) */
-  const [className, setClassName] = useState('');
+
 
   /** User name input */
   const [userName, setUserName] = useState(() => {
@@ -72,7 +71,6 @@ export default function Onboarding({
   const handleBack = () => {
     setStage('select');
     setRole(null);
-    setClassName('');
   };
 
   /**
@@ -82,7 +80,6 @@ export default function Onboarding({
    */
   const handleSubmit = async () => {
     if (!userName.trim() || !userId.trim()) return;
-    if (role === 'teacher' && !className.trim()) return;
     if (submitting) return;
 
     setSubmitting(true);
@@ -91,7 +88,6 @@ export default function Onboarding({
         role: role!,
         userName: userName.trim(),
         userId: userId.trim(),
-        ...(role === 'teacher' ? { className: className.trim() } : {}),
       });
       saveUser(user);
       onComplete();
@@ -171,18 +167,6 @@ export default function Onboarding({
             </div>
             <div className="animate-fade-in">
               <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
-                    클래스 이름
-                  </label>
-                  <input
-                    type="text"
-                    value={className}
-                    onChange={(e) => setClassName(e.target.value)}
-                    placeholder="예: 수학 A반"
-                    className="w-full border border-grain bg-paper-warm rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
-                  />
-                </div>
                 <div>
                   <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
                     사용자 이름
