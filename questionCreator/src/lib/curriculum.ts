@@ -87,48 +87,35 @@ export function getGrades(data: CurriculumData, schoolLevel: string): string[] {
 }
 
 /**
- * Get domains that have content for a given school level and grade.
+ * Get all concepts for a school level and grade across all domains.
  *
  * @param data - Curriculum data
  * @param schoolLevel - School level name
  * @param grade - Grade name
- * @returns Array of domain names (filtered to non-empty for that grade)
+ * @returns Flat concepts from every domain for that grade
  */
-export function getDomains(
+export function getConceptsByGrade(
   data: CurriculumData,
   schoolLevel: string,
-  grade: string,
-): string[] {
-  /** All domains for this school level */
-  const domains = data[schoolLevel] ?? {};
-  return Object.entries(domains)
-    .filter(([, gradeMap]) => (gradeMap[grade] ?? []).length > 0)
-    .map(([domain]) => domain);
-}
-
-/**
- * Get concepts for a given school level, domain, and grade.
- *
- * @param data - Curriculum data
- * @param schoolLevel - School level name
- * @param domain - Domain name
- * @param grade - Grade name
- * @returns Array of flat concepts
- */
-export function getConcepts(
-  data: CurriculumData,
-  schoolLevel: string,
-  domain: string,
   grade: string,
 ): FlatConcept[] {
-  /** Raw concept entries */
-  const entries = data[schoolLevel]?.[domain]?.[grade] ?? [];
-  return entries.map((e) => ({
-    id: e.id,
-    schoolLevel,
-    domain,
-    grade,
-    requirements: e.requirements,
-    curriculum: e.curriculum,
-  }));
+  /** All domains for this school level */
+  const domains = data[schoolLevel] ?? {};
+  /** Accumulated concepts */
+  const result: FlatConcept[] = [];
+
+  for (const [domain, gradeMap] of Object.entries(domains)) {
+    for (const entry of gradeMap[grade] ?? []) {
+      result.push({
+        id: entry.id,
+        schoolLevel,
+        domain,
+        grade,
+        requirements: entry.requirements,
+        curriculum: entry.curriculum,
+      });
+    }
+  }
+
+  return result;
 }
