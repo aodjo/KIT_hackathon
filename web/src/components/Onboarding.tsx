@@ -212,7 +212,7 @@ export default function Onboarding({
                 <button
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="w-full h-11 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors mt-2 disabled:opacity-50"
+                  className="w-full h-11 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors mt-2 disabled:opacity-50 cursor-pointer"
                 >
                   {submitting ? '처리 중...' : '시작하기'}
                 </button>
@@ -264,7 +264,7 @@ export default function Onboarding({
                 <button
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="w-full h-11 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors mt-2 disabled:opacity-50"
+                  className="w-full h-11 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors mt-2 disabled:opacity-50 cursor-pointer"
                 >
                   {submitting ? '처리 중...' : '시작하기'}
                 </button>
