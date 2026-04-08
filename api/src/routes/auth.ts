@@ -253,9 +253,34 @@ auth.post('/update', async (c) => {
  */
 auth.post('/delete', async (c) => {
   const body = await c.req.json<{ id: number }>();
-  await c.env.DB.prepare('DELETE FROM users WHERE id = ?')
-    .bind(body.id)
-    .run();
+  const uid = body.id;
+
+  /** Delete all related data */
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM assignment_answers WHERE student_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM submissions WHERE student_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM class_members WHERE student_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM behavior_signals WHERE student_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM misconceptions WHERE student_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM solutions WHERE student_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM mirror_messages WHERE session_id IN (SELECT id FROM mirror_sessions WHERE student_id = ?)').bind(uid),
+    c.env.DB.prepare('DELETE FROM mirror_sessions WHERE student_id = ?').bind(uid),
+  ]);
+
+  /** Delete teacher-owned data */
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM workbook_questions WHERE workbook_id IN (SELECT id FROM workbooks WHERE teacher_id = ?)').bind(uid),
+    c.env.DB.prepare('DELETE FROM workbooks WHERE teacher_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE teacher_id = ?)').bind(uid),
+    c.env.DB.prepare('DELETE FROM assignment_answers WHERE assignment_id IN (SELECT id FROM assignments WHERE teacher_id = ?)').bind(uid),
+    c.env.DB.prepare('DELETE FROM assignments WHERE teacher_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM class_members WHERE class_id IN (SELECT id FROM classes WHERE teacher_id = ?)').bind(uid),
+    c.env.DB.prepare('DELETE FROM classes WHERE teacher_id = ?').bind(uid),
+  ]);
+
+  /** Delete user record */
+  await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(uid).run();
+
   return c.json({ ok: true });
 });
 
