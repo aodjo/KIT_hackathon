@@ -60,7 +60,7 @@ type Stroke = { points: Point[]; color: string; width: number };
  * @param props.onSave callback when strokes change
  * @return canvas element
  */
-function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onSave: (strokes: Stroke[]) => void }) {
+function DrawCanvas({ strokes: savedStrokes, onSave, height }: { strokes?: Stroke[]; onSave: (strokes: Stroke[]) => void; height?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -431,8 +431,8 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
       <div
         ref={containerRef}
         onWheel={onWheel}
-        className="relative overflow-hidden border border-grain rounded-lg bg-white"
-        style={{ height: 240 }}
+        className={`relative overflow-hidden border border-grain rounded-lg bg-white ${height == null ? 'flex-1' : ''}`}
+        style={height != null ? { height } : undefined}
       >
         <canvas
           ref={canvasRef}
@@ -470,6 +470,8 @@ export default function StudentAssignment() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   /** Work/solution mode per question ('draw' or 'type') */
   const [workMode, setWorkMode] = useState<'draw' | 'type'>('draw');
+  /** Fullscreen canvas mode */
+  const [fullscreen, setFullscreen] = useState(false);
   /** Typed work keyed by question ID */
   const [workText, setWorkText] = useState<Record<number, string>>({});
   /** Canvas strokes keyed by question ID */
@@ -688,23 +690,34 @@ export default function StudentAssignment() {
               <div className="mt-6 pt-5 border-t border-grain">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">풀이과정</span>
-                  <div className="flex gap-1 bg-grain/30 rounded-lg p-0.5">
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setWorkMode('draw')}
-                      className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
-                        workMode === 'draw' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
-                      }`}
+                      onClick={() => setFullscreen(true)}
+                      title="최대화"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer"
                     >
-                      필기
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                      </svg>
                     </button>
-                    <button
-                      onClick={() => setWorkMode('type')}
-                      className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
-                        workMode === 'type' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
-                      }`}
-                    >
-                      타이핑
-                    </button>
+                    <div className="flex gap-1 bg-grain/30 rounded-lg p-0.5">
+                      <button
+                        onClick={() => setWorkMode('draw')}
+                        className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                          workMode === 'draw' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
+                        }`}
+                      >
+                        필기
+                      </button>
+                      <button
+                        onClick={() => setWorkMode('type')}
+                        className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                          workMode === 'type' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
+                        }`}
+                      >
+                        타이핑
+                      </button>
+                    </div>
                   </div>
                 </div>
                 {workMode === 'draw' ? (
@@ -712,6 +725,7 @@ export default function StudentAssignment() {
                     key={q.id}
                     strokes={workDraw[q.id]}
                     onSave={(s) => setWorkDraw((prev) => ({ ...prev, [q.id]: s }))}
+                    height={240}
                   />
                 ) : (
                   <textarea
@@ -758,6 +772,124 @@ export default function StudentAssignment() {
           </div>
         )}
       </div>
+
+      {/* fullscreen canvas overlay */}
+      {fullscreen && q && (
+        <div className="fixed inset-0 z-50 bg-paper flex">
+          {/* left: question */}
+          <div className="w-96 shrink-0 border-r border-grain overflow-y-auto p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-[14px] font-mono font-bold text-ink">{currentIdx + 1}.</span>
+              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[q.difficulty] ?? ''}`}>
+                {q.difficulty}
+              </span>
+              <span className="text-[10px] font-mono text-ink-muted">{q.type}</span>
+            </div>
+            <Latex text={q.question} className="text-[16px] text-ink leading-relaxed block mb-6" />
+            {q.type === '객관식' && q.choices && (() => {
+              const parsed = JSON.parse(q.choices) as Record<string, string>;
+              return (
+                <div className="space-y-2">
+                  {Object.entries(parsed).map(([k, v]) => (
+                    <div key={k} className="text-[13px] text-ink-muted font-mono">
+                      {'①②③④⑤'[Number(k) - 1] ?? k} <Latex text={v} />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* answer in fullscreen */}
+            <div className="mt-6 pt-4 border-t border-grain">
+              <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono block mb-2">답</span>
+              {q.type === '객관식' && q.choices ? (() => {
+                const parsed = JSON.parse(q.choices) as Record<string, string>;
+                return (
+                  <div className="space-y-1.5">
+                    {Object.entries(parsed).map(([k, v]) => {
+                      const selected = answers[q.id] === k;
+                      return (
+                        <button
+                          key={k}
+                          onClick={() => setAnswer(k)}
+                          className={`w-full text-left px-3 py-2 rounded-lg border text-[13px] transition-colors cursor-pointer ${
+                            selected ? 'border-ink bg-ink/5' : 'border-grain hover:border-ink/30'
+                          }`}
+                        >
+                          <span className="font-mono text-ink-muted mr-2">{'①②③④⑤'[Number(k) - 1] ?? k}</span>
+                          <Latex text={v} className="text-ink" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })() : (
+                <input
+                  type="text"
+                  value={answers[q.id] ?? ''}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  placeholder="답을 입력하세요"
+                  className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[14px] text-ink focus:outline-none focus:border-ink transition-colors"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* right: canvas */}
+          <div className="flex-1 flex flex-col">
+            {/* toolbar */}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-grain">
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1 bg-grain/30 rounded-lg p-0.5">
+                  <button
+                    onClick={() => setWorkMode('draw')}
+                    className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                      workMode === 'draw' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
+                    }`}
+                  >
+                    필기
+                  </button>
+                  <button
+                    onClick={() => setWorkMode('type')}
+                    className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                      workMode === 'type' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
+                    }`}
+                  >
+                    타이핑
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => setFullscreen(false)}
+                title="축소"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 14h6v6" /><path d="M20 10h-6V4" /><path d="M14 10l7-7" /><path d="M3 21l7-7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* canvas area */}
+            <div className="flex-1 flex flex-col p-4 min-h-0">
+              {workMode === 'draw' ? (
+                <DrawCanvas
+                  key={`full-${q.id}`}
+                  strokes={workDraw[q.id]}
+                  onSave={(s) => setWorkDraw((prev) => ({ ...prev, [q.id]: s }))}
+                />
+              ) : (
+                <textarea
+                  value={workText[q.id] ?? ''}
+                  onChange={(e) => setWorkText((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                  placeholder="풀이과정을 입력하세요..."
+                  className="w-full h-full border border-grain rounded-lg px-4 py-3 font-mono text-[14px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }
