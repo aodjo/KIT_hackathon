@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { DndContext, DragOverlay, closestCenter, pointerWithin, type DragStartEvent, type DragEndEvent, useDroppable } from '@dnd-kit/core';
+import { DndContext, DragOverlay, closestCenter, type DragStartEvent, type DragEndEvent, type DragOverEvent, useDroppable, useDraggable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { IoIosArrowUp } from 'react-icons/io';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import Navbar from '../components/Navbar';
 
 /** API base URL */
@@ -41,9 +43,28 @@ const diffColor: Record<string, string> = {
 };
 
 /**
+ * Render text with inline LaTeX ($...$).
+ *
+ * @param props.text raw text with $...$ math
+ * @param props.className optional CSS class
+ * @return span with rendered math
+ */
+function Latex({ text, className }: { text: string; className?: string }) {
+  const html = text.replace(/\$([^$]+)\$/g, (_, tex: string) => {
+    try {
+      return katex.renderToString(tex, { throwOnError: false });
+    } catch {
+      return tex;
+    }
+  });
+  return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+/**
  * Sortable question card in workbook panel.
  *
  * @param props.q question data
+ * @param props.index display number
  * @param props.onRemove remove callback
  * @return sortable card element
  */
@@ -81,19 +102,73 @@ function SortableCard({ q, index, onRemove }: { q: Question; index: number; onRe
           ×
         </button>
       </div>
-      <p className="text-[13px] text-ink leading-relaxed">{q.question}</p>
+      <Latex text={q.question} className="text-[13px] text-ink leading-relaxed block" />
       {q.type === '객관식' && q.choices && (() => {
         const parsed = JSON.parse(q.choices) as Record<string, string>;
         return (
           <div className="mt-2 space-y-0.5">
             {Object.entries(parsed).map(([k, v]) => (
               <div key={k} className="text-[11px] text-ink-muted font-mono">
-                {'①②③④⑤'[Number(k) - 1] ?? k} {v}
+                {'①②③④⑤'[Number(k) - 1] ?? k} <Latex text={v} />
               </div>
             ))}
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+/**
+ * Draggable marketplace question card.
+ *
+ * @param props.q question data
+ * @param props.added whether already in workbook
+ * @param props.onClick click handler
+ * @return draggable card element
+ */
+function DraggableMarketCard({ q, added, onClick }: { q: Question; added: boolean; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `market-${q.id}`,
+    disabled: added,
+  });
+
+  /** Inline transform style */
+  const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, opacity: isDragging ? 0.4 : 1 } : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      className={`border rounded-lg p-3 transition-colors ${
+        added
+          ? 'border-grain/50 bg-grain/20 opacity-50'
+          : 'border-grain hover:border-ink/30 cursor-grab active:cursor-grabbing'
+      }`}
+    >
+      <Latex text={q.question} className="text-[13px] text-ink leading-relaxed line-clamp-2 block" />
+      {q.type === '객관식' && q.choices && (() => {
+        const parsed = JSON.parse(q.choices) as Record<string, string>;
+        return (
+          <div className="mt-2 space-y-0.5">
+            {Object.entries(parsed).map(([k, v]) => (
+              <div key={k} className="text-[11px] text-ink-muted font-mono">
+                {'①②③④⑤'[Number(k) - 1] ?? k} <Latex text={v} />
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+      <div className="flex items-center gap-2 mt-2">
+        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[q.difficulty] ?? ''}`}>
+          {q.difficulty}
+        </span>
+        <span className="text-[10px] font-mono text-ink-muted">{q.type}</span>
+        {added && <span className="text-[10px] text-ink-muted ml-auto">추가됨</span>}
+      </div>
     </div>
   );
 }
@@ -125,8 +200,10 @@ export default function WorkbookEditor() {
   /** Marketplace questions */
   const [marketQuestions, setMarketQuestions] = useState<Question[]>([]);
 
-  /** Currently dragged item ID */
-  const [activeId, setActiveId] = useState<number | null>(null);
+  /** Currently dragged item ID (number for workbook, "market-N" for marketplace) */
+  const [activeId, setActiveId] = useState<string | number | null>(null);
+  /** Insert index for marketplace → workbook drag */
+  const [insertIndex, setInsertIndex] = useState<number | null>(null);
 
   /** Saving name */
   const [savingName, setSavingName] = useState(false);
@@ -192,19 +269,28 @@ export default function WorkbookEditor() {
     topics.filter((t) => t.school_level === level && t.grade === grade);
 
   /**
-   * Add question to workbook.
+   * Add question to workbook at optional position.
    *
    * @param q question to add
+   * @param index optional insertion index
    * @return void
    */
-  const addQuestion = async (q: Question) => {
+  const addQuestion = async (q: Question, index?: number) => {
     if (inWorkbook.has(q.id)) return;
-    setQuestions((prev) => [...prev, q]);
+    const i = index ?? questions.length;
+    const updated = [...questions];
+    updated.splice(i, 0, q);
+    setQuestions(updated);
     setInWorkbook((prev) => new Set(prev).add(q.id));
     await fetch(`${API}/api/workbooks/${id}/questions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ questionId: q.id }),
+    });
+    await fetch(`${API}/api/workbooks/${id}/questions/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ questionIds: updated.map((p) => p.id) }),
     });
   };
 
@@ -235,38 +321,85 @@ export default function WorkbookEditor() {
    * @return void
    */
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as number);
+    setActiveId(event.active.id);
+    setInsertIndex(null);
   };
 
   /** Ref for left marketplace panel */
   const marketplaceRef = useRef<HTMLDivElement>(null);
+  /** Droppable zone for workbook panel */
+  const { setNodeRef: setWorkbookDropRef } = useDroppable({ id: 'workbook-drop' });
 
   /**
-   * Handle drag end for reordering or removing.
+   * Track insert position for marketplace → workbook drag.
+   *
+   * @param event drag over event
+   * @return void
+   */
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    const aid = active.id;
+
+    /** Only handle marketplace items */
+    if (typeof aid !== 'string' || !String(aid).startsWith('market-')) return;
+
+    /** Check pointer actually crossed into workbook area */
+    const marketRect = marketplaceRef.current?.getBoundingClientRect();
+    if (!marketRect) return;
+    const currentX = (event.activatorEvent as PointerEvent).clientX + event.delta.x;
+    const isInWorkbook = currentX > marketRect.right;
+
+    if (isInWorkbook && over && typeof over.id === 'number') {
+      const idx = questions.findIndex((q) => q.id === over.id);
+      setInsertIndex(idx >= 0 ? idx : questions.length);
+    } else if (isInWorkbook && over?.id === 'workbook-drop') {
+      setInsertIndex(questions.length);
+    } else {
+      setInsertIndex(null);
+    }
+  };
+
+  /**
+   * Handle drag end for reordering, removing, or adding.
    *
    * @param event drag end event
    * @return void
    */
   const handleDragEnd = async (event: DragEndEvent) => {
     const dragId = activeId;
+    const dropIndex = insertIndex;
     setActiveId(null);
+    setInsertIndex(null);
+    if (!dragId) return;
 
-    /** Check if dropped over the marketplace panel */
-    if (dragId && marketplaceRef.current && event.activatorEvent instanceof PointerEvent) {
+    const { active, over } = event;
+
+    /** Marketplace item → workbook */
+    if (typeof dragId === 'string' && String(dragId).startsWith('market-')) {
+      const qId = Number(String(dragId).replace('market-', ''));
+      const q = marketQuestions.find((mq) => mq.id === qId);
+      if (q && dropIndex != null) {
+        addQuestion(q, dropIndex);
+      }
+      return;
+    }
+
+    /** Workbook item dragged to marketplace → remove */
+    const pointer = event.activatorEvent instanceof PointerEvent && (event as any).delta
+      ? {
+          x: (event.activatorEvent as PointerEvent).clientX + (event as any).delta.x,
+          y: (event.activatorEvent as PointerEvent).clientY + (event as any).delta.y,
+        }
+      : null;
+    if (pointer && marketplaceRef.current) {
       const rect = marketplaceRef.current.getBoundingClientRect();
-      const pointer = (event as any).delta
-        ? {
-            x: (event.activatorEvent as PointerEvent).clientX + (event as any).delta.x,
-            y: (event.activatorEvent as PointerEvent).clientY + (event as any).delta.y,
-          }
-        : null;
-      if (pointer && pointer.x < rect.right) {
-        removeQuestion(dragId);
+      if (pointer.x < rect.right) {
+        removeQuestion(dragId as number);
         return;
       }
     }
 
-    const { active, over } = event;
+    /** Workbook reorder */
     if (!over || active.id === over.id) return;
 
     const oldIndex = questions.findIndex((q) => q.id === active.id);
@@ -303,18 +436,24 @@ export default function WorkbookEditor() {
     }
   };
 
+  /** Whether active drag is from marketplace */
+  const isMarketDrag = typeof activeId === 'string' && String(activeId).startsWith('market-');
   /** Active dragged question */
-  const activeQuestion = activeId ? questions.find((q) => q.id === activeId) : null;
-  /** Active question index (1-based) */
-  const activeIndex = activeId ? questions.findIndex((q) => q.id === activeId) + 1 : 0;
+  const activeQuestion = activeId
+    ? isMarketDrag
+      ? marketQuestions.find((q) => q.id === Number(String(activeId).replace('market-', '')))
+      : questions.find((q) => q.id === activeId)
+    : null;
+  /** Active question index (1-based, 0 for marketplace) */
+  const activeIndex = activeId && !isMarketDrag ? questions.findIndex((q) => q.id === activeId) + 1 : 0;
 
   return (
     <div className="min-h-screen font-display bg-paper-grain flex flex-col">
       <Navbar />
-      <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
       <div className="flex-1 flex">
         {/* left: marketplace */}
-        <div ref={marketplaceRef} className={`w-[480px] shrink-0 flex border-r transition-colors ${activeId ? 'border-r-red-300 bg-red-50/30' : 'border-grain'}`}>
+        <div ref={marketplaceRef} className={`w-[480px] shrink-0 flex border-r transition-colors ${activeId && !isMarketDrag ? 'border-r-red-300 bg-red-50/30' : 'border-grain'}`}>
           {/* topic sidebar */}
           <nav className="w-44 shrink-0 border-r border-grain py-4 px-3 overflow-y-auto">
             <div className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono px-2 mb-3">
@@ -391,42 +530,14 @@ export default function WorkbookEditor() {
                 <p className="text-[13px] text-ink-muted">문제가 없습니다.</p>
               </div>
             ) : (
-              marketQuestions.map((q) => {
-                /** Whether this question is already in workbook */
-                const added = inWorkbook.has(q.id);
-                return (
-                  <div
-                    key={q.id}
-                    onClick={() => !added && addQuestion(q)}
-                    className={`border rounded-lg p-3 transition-colors ${
-                      added
-                        ? 'border-grain/50 bg-grain/20 opacity-50'
-                        : 'border-grain hover:border-ink/30 cursor-pointer'
-                    }`}
-                  >
-                    <p className="text-[13px] text-ink leading-relaxed line-clamp-2">{q.question}</p>
-                    {q.type === '객관식' && q.choices && (() => {
-                      const parsed = JSON.parse(q.choices) as Record<string, string>;
-                      return (
-                        <div className="mt-2 space-y-0.5">
-                          {Object.entries(parsed).map(([k, v]) => (
-                            <div key={k} className="text-[11px] text-ink-muted font-mono">
-                              {'①②③④⑤'[Number(k) - 1] ?? k} {v}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[q.difficulty] ?? ''}`}>
-                        {q.difficulty}
-                      </span>
-                      <span className="text-[10px] font-mono text-ink-muted">{q.type}</span>
-                      {added && <span className="text-[10px] text-ink-muted ml-auto">추가됨</span>}
-                    </div>
-                  </div>
-                );
-              })
+              marketQuestions.map((q) => (
+                <DraggableMarketCard
+                  key={q.id}
+                  q={q}
+                  added={inWorkbook.has(q.id)}
+                  onClick={() => !inWorkbook.has(q.id) && addQuestion(q)}
+                />
+              ))
             )}
           </div>
         </div>
@@ -466,51 +577,72 @@ export default function WorkbookEditor() {
             <p className="text-[12px] text-ink-muted font-mono mt-1">{questions.length}문제</p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6">
-            {questions.length === 0 ? (
+          <div ref={setWorkbookDropRef} className="flex-1 overflow-y-auto p-6">
+            {questions.length === 0 && insertIndex == null ? (
               <div className="border border-dashed border-grain rounded-lg p-8 text-center">
                 <p className="text-[14px] text-ink-muted">
-                  왼쪽에서 문제를 클릭하여 추가하세요.
+                  왼쪽에서 문제를 클릭하거나 드래그하여 추가하세요.
                 </p>
               </div>
             ) : (
               <SortableContext items={questions.map((q) => q.id)} strategy={rectSortingStrategy}>
-                  <div className="grid grid-cols-2 gap-3">
-                    {questions.map((q, i) => (
-                      <SortableCard key={q.id} q={q} index={i + 1} onRemove={() => removeQuestion(q.id)} />
-                    ))}
-                  </div>
-                </SortableContext>
+                <div className="grid grid-cols-2 gap-3">
+                  {questions.map((q, i) => (
+                    <>{insertIndex === i && (
+                      <div key="placeholder" className="border-2 border-dashed border-ink/20 rounded-lg min-h-[80px] flex items-center justify-center">
+                        <span className="text-[12px] text-ink-muted">여기에 추가</span>
+                      </div>
+                    )}
+                    <SortableCard key={q.id} q={q} index={i + 1} onRemove={() => removeQuestion(q.id)} />
+                    </>
+                  ))}
+                  {insertIndex != null && insertIndex >= questions.length && (
+                    <div key="placeholder-end" className="border-2 border-dashed border-ink/20 rounded-lg min-h-[80px] flex items-center justify-center">
+                      <span className="text-[12px] text-ink-muted">여기에 추가</span>
+                    </div>
+                  )}
+                </div>
+              </SortableContext>
             )}
           </div>
         </div>
       </div>
       <DragOverlay>
         {activeQuestion && (
-          <div className="border border-grain rounded-lg p-4 bg-paper shadow-lg cursor-grabbing">
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-mono font-bold text-ink">{activeIndex}.</span>
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[activeQuestion.difficulty] ?? ''}`}>
-                  {activeQuestion.difficulty}
-                </span>
-                <span className="text-[10px] font-mono text-ink-muted">{activeQuestion.school_level} &gt; {activeQuestion.grade} &gt; {activeQuestion.curriculum_topic}</span>
+          <div className={`border border-grain rounded-lg ${isMarketDrag ? 'p-3' : 'p-4'} bg-paper shadow-lg cursor-grabbing`}>
+            {!isMarketDrag && (
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-mono font-bold text-ink">{activeIndex}.</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[activeQuestion.difficulty] ?? ''}`}>
+                    {activeQuestion.difficulty}
+                  </span>
+                  <span className="text-[10px] font-mono text-ink-muted">{activeQuestion.school_level} &gt; {activeQuestion.grade} &gt; {activeQuestion.curriculum_topic}</span>
+                </div>
+                <span className="text-ink-muted text-[14px] leading-none">×</span>
               </div>
-              <span className="text-ink-muted text-[14px] leading-none">×</span>
-            </div>
-            <p className="text-[13px] text-ink leading-relaxed">{activeQuestion.question}</p>
+            )}
+            <Latex text={activeQuestion.question} className="text-[13px] text-ink leading-relaxed line-clamp-2 block" />
             {activeQuestion.type === '객관식' && activeQuestion.choices && (() => {
               const parsed = JSON.parse(activeQuestion.choices!) as Record<string, string>;
               return (
                 <div className="mt-2 space-y-0.5">
                   {Object.entries(parsed).map(([k, v]) => (
                     <div key={k} className="text-[11px] text-ink-muted font-mono">
-                      {'①②③④⑤'[Number(k) - 1] ?? k} {v}
+                      {'①②③④⑤'[Number(k) - 1] ?? k} <Latex text={v} />
                     </div>
                   ))}
                 </div>
               );
             })()}
+            {isMarketDrag && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[activeQuestion.difficulty] ?? ''}`}>
+                  {activeQuestion.difficulty}
+                </span>
+                <span className="text-[10px] font-mono text-ink-muted">{activeQuestion.type}</span>
+              </div>
+            )}
           </div>
         )}
       </DragOverlay>
