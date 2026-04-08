@@ -59,10 +59,10 @@ const mathSymbols = [
     { display: '∞', insert: '\\infty ' },
   ]},
   { label: '분수·근호', items: [
-    { display: '⬚/⬚', insert: '\\frac{}{}', cursor: -3 },
-    { display: '√', insert: '\\sqrt{}', cursor: -1 },
-    { display: 'xⁿ', insert: '^{}', cursor: -1 },
-    { display: 'x₋', insert: '_{}', cursor: -1 },
+    { display: '⬚/⬚', insert: '\\frac{a}{b}' },
+    { display: '√', insert: '\\sqrt{x}' },
+    { display: 'xⁿ', insert: 'x^{n}' },
+    { display: 'x₋', insert: 'x_{i}' },
   ]},
   { label: '도형', items: [
     { display: '∠', insert: '\\angle ' },
@@ -89,43 +89,138 @@ const mathSymbols = [
  * @return editor element
  */
 function MathEditor({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const isInternalChange = useRef(false);
+  /** Editing math block index */
+  const [editingMath, setEditingMath] = useState<{ tex: string; idx: number } | null>(null);
+  const mathInputRef = useRef<HTMLInputElement>(null);
 
   /**
-   * Insert LaTeX at cursor, auto-wrapping with $ if needed.
+   * Convert value to HTML with rendered math.
    *
-   * @param insert text to insert
-   * @param cursorOffset offset from end of inserted text
-   * @return void
+   * @param text raw value
+   * @return HTML string
    */
-  const insertSymbol = (insert: string, cursorOffset?: number) => {
-    const ta = textareaRef.current;
-    if (!ta) { onChange(value + `$${insert}$`); return; }
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const before = value.slice(0, start);
-    const after = value.slice(end);
+  const toHTML = (text: string): string => {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\$([^$]+)\$/g, (_, tex: string) => {
+        try {
+          const rendered = katex.renderToString(tex, { throwOnError: false });
+          return `<span contenteditable="false" class="inline-block align-middle mx-0.5 px-1 py-0.5 rounded bg-grain/30 cursor-pointer" data-math="${encodeURIComponent(tex)}">${rendered}</span>`;
+        } catch {
+          return `<span contenteditable="false" class="inline-block mx-0.5 px-1 py-0.5 rounded bg-red-50 text-red-500 text-[12px] font-mono cursor-pointer" data-math="${encodeURIComponent(tex)}">${tex}</span>`;
+        }
+      })
+      .replace(/\n/g, '<br>');
+  };
 
-    /** Check if cursor is already inside $...$ */
-    const beforeDollarCount = (before.match(/\$/g) || []).length;
-    const insideMath = beforeDollarCount % 2 === 1;
+  /**
+   * Extract value from editor DOM.
+   *
+   * @param el editor element
+   * @return raw value string
+   */
+  const fromDOM = (el: HTMLElement): string => {
+    let result = '';
+    el.childNodes.forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        result += node.textContent ?? '';
+      } else if (node instanceof HTMLElement) {
+        if (node.dataset.math) {
+          result += `$${decodeURIComponent(node.dataset.math)}$`;
+        } else if (node.tagName === 'BR') {
+          result += '\n';
+        } else {
+          result += node.textContent ?? '';
+        }
+      }
+    });
+    return result;
+  };
 
-    let newVal: string;
-    let newPos: number;
-    if (insideMath) {
-      newVal = before + insert + after;
-      newPos = start + insert.length + (cursorOffset ?? 0);
+  /** Sync DOM from value (only on external changes) */
+  useEffect(() => {
+    if (isInternalChange.current) { isInternalChange.current = false; return; }
+    if (editorRef.current) editorRef.current.innerHTML = toHTML(value) || '<br>';
+  }, [value]);
+
+  /** Handle editor input */
+  const handleInput = () => {
+    if (!editorRef.current) return;
+    isInternalChange.current = true;
+    onChange(fromDOM(editorRef.current));
+  };
+
+  /** Handle click on math block */
+  const handleClick = (e: React.MouseEvent) => {
+    const target = (e.target as HTMLElement).closest('[data-math]') as HTMLElement | null;
+    if (!target?.dataset.math) return;
+    const tex = decodeURIComponent(target.dataset.math);
+    const el = editorRef.current;
+    if (!el) return;
+    const mathEls = el.querySelectorAll('[data-math]');
+    let idx = -1;
+    mathEls.forEach((m, i) => { if (m === target) idx = i; });
+    setEditingMath({ tex, idx });
+    requestAnimationFrame(() => mathInputRef.current?.focus());
+  };
+
+  /** Save edited math */
+  const saveMath = () => {
+    if (!editingMath || !editorRef.current) return;
+    const mathEls = editorRef.current.querySelectorAll('[data-math]');
+    const target = mathEls[editingMath.idx] as HTMLElement;
+    if (target) {
+      target.dataset.math = encodeURIComponent(editingMath.tex);
+      try {
+        target.innerHTML = katex.renderToString(editingMath.tex, { throwOnError: false });
+        target.className = 'inline-block align-middle mx-0.5 px-1 py-0.5 rounded bg-grain/30 cursor-pointer';
+      } catch {
+        target.textContent = editingMath.tex;
+        target.className = 'inline-block mx-0.5 px-1 py-0.5 rounded bg-red-50 text-red-500 text-[12px] font-mono cursor-pointer';
+      }
+    }
+    isInternalChange.current = true;
+    onChange(fromDOM(editorRef.current));
+    setEditingMath(null);
+  };
+
+  /** Insert math from toolbar */
+  const insertSymbol = (insert: string) => {
+    const el = editorRef.current;
+    if (!el) return;
+
+    const sel = window.getSelection();
+    let range: Range;
+    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+      range = sel.getRangeAt(0);
     } else {
-      const wrapped = `$${insert}$`;
-      newVal = before + wrapped + after;
-      newPos = start + wrapped.length + (cursorOffset ? cursorOffset - 1 : 0);
+      range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
     }
 
-    onChange(newVal);
-    requestAnimationFrame(() => {
-      ta.setSelectionRange(newPos, newPos);
-      ta.focus();
-    });
+    const span = document.createElement('span');
+    span.contentEditable = 'false';
+    span.dataset.math = encodeURIComponent(insert);
+    span.className = 'inline-block align-middle mx-0.5 px-1 py-0.5 rounded bg-grain/30 cursor-pointer';
+    try {
+      span.innerHTML = katex.renderToString(insert, { throwOnError: false });
+    } catch {
+      span.textContent = insert;
+    }
+
+    range.deleteContents();
+    range.insertNode(span);
+    range.setStartAfter(span);
+    range.collapse(true);
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+
+    isInternalChange.current = true;
+    onChange(fromDOM(el));
   };
 
   return (
@@ -138,7 +233,7 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
             {group.items.map((sym) => (
               <button
                 key={sym.insert}
-                onClick={() => insertSymbol(sym.insert, (sym as any).cursor)}
+                onClick={() => insertSymbol(sym.insert)}
                 title={`${group.label}: ${sym.display}`}
                 className="w-8 h-8 flex items-center justify-center rounded-md text-[15px] text-ink hover:bg-grain/50 transition-colors cursor-pointer font-mono"
               >
@@ -149,21 +244,41 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
         ))}
       </div>
 
-      {/* text input */}
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="풀이과정을 입력하세요... (수식은 $...$로 감싸기)"
-        rows={4}
-        className="w-full border border-grain rounded-lg px-4 py-3 font-mono text-[14px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
+      {/* contentEditable editor */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleInput}
+        onClick={handleClick}
+        data-placeholder="풀이과정을 입력하세요..."
+        className="w-full border border-grain rounded-lg px-4 py-3 text-[15px] text-ink leading-relaxed min-h-[100px] focus:outline-none focus:border-ink transition-colors empty:before:content-[attr(data-placeholder)] empty:before:text-ink-muted"
       />
 
-      {/* rendered preview (only when math present) */}
-      {value.includes('$') && (
-        <div className="mt-2 border border-grain/50 rounded-lg px-4 py-3 bg-grain/10">
-          <span className="text-[9px] font-mono text-ink-muted block mb-1">미리보기</span>
-          <Latex text={value} className="text-[15px] text-ink leading-relaxed block whitespace-pre-wrap" />
+      {/* math edit popover */}
+      {editingMath && (
+        <div className="mt-2 border border-ink/20 rounded-lg p-3 bg-paper shadow-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-mono text-ink-muted">수식 편집</span>
+          </div>
+          <div className="flex gap-2">
+            <input
+              ref={mathInputRef}
+              type="text"
+              value={editingMath.tex}
+              onChange={(e) => setEditingMath({ ...editingMath, tex: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveMath(); if (e.key === 'Escape') setEditingMath(null); }}
+              className="flex-1 border border-grain rounded-lg px-3 py-2 font-mono text-[13px] text-ink focus:outline-none focus:border-ink transition-colors"
+            />
+            <button onClick={saveMath} className="h-9 px-4 rounded-lg bg-ink text-paper text-[12px] font-medium cursor-pointer hover:bg-ink-soft transition-colors">
+              확인
+            </button>
+          </div>
+          {editingMath.tex && (
+            <div className="mt-2 px-3 py-2 bg-grain/10 rounded-lg">
+              <Latex text={`$${editingMath.tex}$`} className="text-[16px] text-ink block" />
+            </div>
+          )}
         </div>
       )}
     </div>
