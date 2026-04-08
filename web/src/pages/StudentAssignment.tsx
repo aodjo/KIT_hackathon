@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
@@ -48,6 +48,130 @@ function Latex({ text, className }: { text: string; className?: string }) {
 }
 
 /**
+ * Canvas drawing component for handwritten work.
+ *
+ * @param props.dataUrl saved canvas data URL
+ * @param props.onSave callback with data URL when drawing changes
+ * @return canvas element
+ */
+function DrawCanvas({ dataUrl, onSave }: { dataUrl?: string; onSave: (url: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const lastPos = useRef({ x: 0, y: 0 });
+  const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
+
+  /** Restore saved drawing */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (dataUrl) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0);
+      img.src = dataUrl;
+    }
+  }, []);
+
+  /**
+   * Get canvas-relative position from pointer event.
+   *
+   * @param e pointer event
+   * @return x, y coordinates
+   */
+  const getPos = (e: React.PointerEvent) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  /** Start drawing */
+  const onDown = (e: React.PointerEvent) => {
+    drawing.current = true;
+    lastPos.current = getPos(e);
+    canvasRef.current?.setPointerCapture(e.pointerId);
+  };
+
+  /** Draw line segment */
+  const onMove = (e: React.PointerEvent) => {
+    if (!drawing.current) return;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(lastPos.current.x, lastPos.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    if (tool === 'eraser') {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 20;
+    } else {
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
+    }
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    lastPos.current = pos;
+  };
+
+  /** End drawing and save */
+  const onUp = () => {
+    drawing.current = false;
+    if (canvasRef.current) onSave(canvasRef.current.toDataURL());
+  };
+
+  /** Clear canvas */
+  const handleClear = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    onSave('');
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <button
+          onClick={() => setTool('pen')}
+          className={`text-[11px] font-mono px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+            tool === 'pen' ? 'bg-ink text-paper border-ink' : 'border-grain text-ink-muted hover:text-ink'
+          }`}
+        >
+          펜
+        </button>
+        <button
+          onClick={() => setTool('eraser')}
+          className={`text-[11px] font-mono px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+            tool === 'eraser' ? 'bg-ink text-paper border-ink' : 'border-grain text-ink-muted hover:text-ink'
+          }`}
+        >
+          지우개
+        </button>
+        <button
+          onClick={handleClear}
+          className="text-[11px] font-mono px-2.5 py-1 rounded-full border border-grain text-ink-muted hover:text-ink transition-colors cursor-pointer ml-auto"
+        >
+          전체 지우기
+        </button>
+      </div>
+      <canvas
+        ref={canvasRef}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerLeave={onUp}
+        className="w-full h-48 border border-grain rounded-lg bg-white cursor-crosshair touch-none"
+      />
+    </div>
+  );
+}
+
+/**
  * Student assignment solve page (one question at a time).
  *
  * @return solve page element
@@ -63,6 +187,12 @@ export default function StudentAssignment() {
   const [questions, setQuestions] = useState<Question[]>([]);
   /** Student answers keyed by question ID */
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  /** Work/solution mode per question ('draw' or 'type') */
+  const [workMode, setWorkMode] = useState<'draw' | 'type'>('draw');
+  /** Typed work keyed by question ID */
+  const [workText, setWorkText] = useState<Record<number, string>>({});
+  /** Canvas data URLs keyed by question ID */
+  const [workDraw, setWorkDraw] = useState<Record<number, string>>({});
   /** Current question index */
   const [currentIdx, setCurrentIdx] = useState(0);
   /** Submission result */
@@ -272,6 +402,46 @@ export default function StudentAssignment() {
                   className="w-full border border-grain rounded-lg px-5 py-3 font-mono text-[16px] text-ink focus:outline-none focus:border-ink transition-colors"
                 />
               )}
+
+              {/* work/solution section */}
+              <div className="mt-6 pt-5 border-t border-grain">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">풀이과정</span>
+                  <div className="flex gap-1 bg-grain/30 rounded-lg p-0.5">
+                    <button
+                      onClick={() => setWorkMode('draw')}
+                      className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                        workMode === 'draw' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
+                      }`}
+                    >
+                      필기
+                    </button>
+                    <button
+                      onClick={() => setWorkMode('type')}
+                      className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                        workMode === 'type' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
+                      }`}
+                    >
+                      타이핑
+                    </button>
+                  </div>
+                </div>
+                {workMode === 'draw' ? (
+                  <DrawCanvas
+                    key={q.id}
+                    dataUrl={workDraw[q.id]}
+                    onSave={(url) => setWorkDraw((prev) => ({ ...prev, [q.id]: url }))}
+                  />
+                ) : (
+                  <textarea
+                    value={workText[q.id] ?? ''}
+                    onChange={(e) => setWorkText((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                    placeholder="풀이과정을 입력하세요..."
+                    rows={5}
+                    className="w-full border border-grain rounded-lg px-4 py-3 font-mono text-[14px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
+                  />
+                )}
+              </div>
             </div>
 
             {/* navigation */}
