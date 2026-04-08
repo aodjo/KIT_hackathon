@@ -37,6 +37,8 @@ const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
 export default function Dashboard() {
   const navigate = useNavigate();
   const { classId: classIdFromUrl } = useParams<{ classId: string }>();
+  /** Whether initial class load is done */
+  const initialLoad = useRef(true);
   /** Current user */
   const user = getStoredUser();
   /** Currently selected class */
@@ -182,7 +184,7 @@ export default function Dashboard() {
   if (!user) return null;
 
   return (
-    <AppLayout selectedClassId={selectedClass?.id} initialClassId={classIdFromUrl} onSelectClass={(cls) => { setSelectedClass(cls); navigate(`/c/${cls.id}`, { replace: true }); }}>
+    <AppLayout selectedClassId={selectedClass?.id} initialClassId={classIdFromUrl} onSelectClass={(cls) => { setSelectedClass(cls); if (initialLoad.current) { initialLoad.current = false; if (!classIdFromUrl) navigate(`/c/${cls.id}`, { replace: true }); } else { navigate(`/c/${cls.id}`); } }}>
       <div className="px-6 lg:px-10 py-10">
         {/* header */}
         <div className="mb-10 flex items-end justify-between">
