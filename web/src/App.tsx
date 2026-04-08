@@ -8,6 +8,8 @@ import Learn from './pages/Learn';
 import Profile from './pages/Profile';
 import WorkbookEditor from './pages/WorkbookEditor';
 import AssignmentDetail from './pages/AssignmentDetail';
+import StudentDashboard from './pages/StudentDashboard';
+import StudentAssignment from './pages/StudentAssignment';
 import Navbar from './components/Navbar';
 import Onboarding from './components/Onboarding';
 import {
@@ -17,6 +19,19 @@ import {
   type StoredUser,
   type GoogleProfile,
 } from './lib/auth';
+
+/**
+ * Route by user role: teacher gets A, student gets B.
+ *
+ * @param props.teacher teacher component
+ * @param props.student student component
+ * @return role-appropriate element
+ */
+function RoleRoute({ teacher, student }: { teacher: JSX.Element; student: JSX.Element }) {
+  const user = getStoredUser();
+  if (!user) return null;
+  return user.role === 'teacher' ? teacher : student;
+}
 
 /**
  * Scroll window to top on route change.
@@ -144,7 +159,7 @@ function RootPage() {
   if (auth.user.role === 'teacher') {
     return <Dashboard />;
   }
-  return <Learn />;
+  return <StudentDashboard />;
 }
 
 /**
@@ -158,8 +173,8 @@ export default function App() {
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<RootPage />} />
-        <Route path="/c/:classId" element={<Dashboard />} />
-        <Route path="/c/:classId/a/:id" element={<AssignmentDetail />} />
+        <Route path="/c/:classId" element={<RoleRoute teacher={<Dashboard />} student={<StudentDashboard />} />} />
+        <Route path="/c/:classId/a/:id" element={<RoleRoute teacher={<AssignmentDetail />} student={<StudentAssignment />} />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/workbook/:id" element={<WorkbookEditor />} />
         <Route path="/articles" element={<Articles />} />
