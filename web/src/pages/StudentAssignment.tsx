@@ -90,7 +90,6 @@ const mathSymbols = [
  */
 function MathEditor({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [showSource, setShowSource] = useState(false);
 
   /**
    * Insert LaTeX at cursor, auto-wrapping with $ if needed.
@@ -123,7 +122,6 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
     }
 
     onChange(newVal);
-    setShowSource(true);
     requestAnimationFrame(() => {
       ta.setSelectionRange(newPos, newPos);
       ta.focus();
@@ -132,15 +130,6 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
 
   return (
     <div className={className}>
-      {/* rendered preview (main view) */}
-      <div className="border border-grain rounded-lg px-4 py-3 bg-paper min-h-[60px] mb-2">
-        {value ? (
-          <Latex text={value} className="text-[15px] text-ink leading-relaxed block whitespace-pre-wrap" />
-        ) : (
-          <span className="text-[14px] text-ink-muted">풀이과정이 여기에 표시됩니다</span>
-        )}
-      </div>
-
       {/* symbol toolbar */}
       <div className="flex flex-wrap items-center gap-1 mb-2">
         {mathSymbols.map((group) => (
@@ -158,26 +147,24 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
             ))}
           </div>
         ))}
-        <div className="ml-auto">
-          <button
-            onClick={() => setShowSource(!showSource)}
-            className={`text-[11px] font-mono px-2.5 py-1 rounded-md transition-colors cursor-pointer ${showSource ? 'bg-ink/10 text-ink' : 'text-ink-muted hover:text-ink'}`}
-          >
-            소스
-          </button>
-        </div>
       </div>
 
-      {/* source input (collapsible) */}
-      {showSource && (
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="텍스트 입력... (수식은 $...$로 감싸기)"
-          rows={3}
-          className="w-full border border-grain rounded-lg px-4 py-3 font-mono text-[13px] text-ink-muted resize-none focus:outline-none focus:border-ink transition-colors"
-        />
+      {/* text input */}
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="풀이과정을 입력하세요... (수식은 $...$로 감싸기)"
+        rows={4}
+        className="w-full border border-grain rounded-lg px-4 py-3 font-mono text-[14px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
+      />
+
+      {/* rendered preview (only when math present) */}
+      {value.includes('$') && (
+        <div className="mt-2 border border-grain/50 rounded-lg px-4 py-3 bg-grain/10">
+          <span className="text-[9px] font-mono text-ink-muted block mb-1">미리보기</span>
+          <Latex text={value} className="text-[15px] text-ink leading-relaxed block whitespace-pre-wrap" />
+        </div>
       )}
     </div>
   );
