@@ -179,8 +179,42 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
     ctx.restore();
   };
 
+  /**
+   * Fit view to stroke bounding box with padding.
+   *
+   * @return void
+   */
+  const fitToContent = () => {
+    const container = containerRef.current;
+    if (!container || strokes.current.length === 0) return;
+    const allPoints = strokes.current.flatMap((s) => s.points);
+    if (allPoints.length === 0) return;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of allPoints) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+
+    const pad = 30;
+    const cw = container.offsetWidth;
+    const ch = container.offsetHeight;
+    const bw = maxX - minX + pad * 2;
+    const bh = maxY - minY + pad * 2;
+    const s = Math.min(cw / bw, ch / bh, 2);
+    scaleRef.current = s;
+    offsetRef.current = {
+      x: (cw - bw * s) / 2 - (minX - pad) * s,
+      y: (ch - bh * s) / 2 - (minY - pad) * s,
+    };
+    setScaleUI(s);
+  };
+
   /** Initial render + resize */
   useEffect(() => {
+    fitToContent();
     render();
     const obs = new ResizeObserver(() => render());
     if (containerRef.current) obs.observe(containerRef.current);
