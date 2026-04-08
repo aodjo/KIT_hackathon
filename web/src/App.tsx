@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Learn from './pages/Learn';
 import Profile from './pages/Profile';
 import WorkbookEditor from './pages/WorkbookEditor';
+import AssignmentDetail from './pages/AssignmentDetail';
 import Navbar from './components/Navbar';
 import Onboarding from './components/Onboarding';
 import {
@@ -159,6 +160,7 @@ export default function App() {
         <Route path="/" element={<RootPage />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/workbook/:id" element={<WorkbookEditor />} />
+        <Route path="/assignment/:id" element={<AssignmentDetail />} />
         <Route path="/articles" element={<Articles />} />
         <Route path="/articles/date/:date" element={<Articles />} />
         <Route path="/articles/:slug" element={<Article />} />
