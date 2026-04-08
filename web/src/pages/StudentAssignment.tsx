@@ -90,9 +90,10 @@ const mathSymbols = [
  */
 function MathEditor({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showSource, setShowSource] = useState(false);
 
   /**
-   * Insert LaTeX at cursor position.
+   * Insert LaTeX at cursor, auto-wrapping with $ if needed.
    *
    * @param insert text to insert
    * @param cursorOffset offset from end of inserted text
@@ -100,59 +101,83 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
    */
   const insertSymbol = (insert: string, cursorOffset?: number) => {
     const ta = textareaRef.current;
-    if (!ta) return;
+    if (!ta) { onChange(value + `$${insert}$`); return; }
     const start = ta.selectionStart;
     const end = ta.selectionEnd;
     const before = value.slice(0, start);
     const after = value.slice(end);
-    const newVal = before + insert + after;
+
+    /** Check if cursor is already inside $...$ */
+    const beforeDollarCount = (before.match(/\$/g) || []).length;
+    const insideMath = beforeDollarCount % 2 === 1;
+
+    let newVal: string;
+    let newPos: number;
+    if (insideMath) {
+      newVal = before + insert + after;
+      newPos = start + insert.length + (cursorOffset ?? 0);
+    } else {
+      const wrapped = `$${insert}$`;
+      newVal = before + wrapped + after;
+      newPos = start + wrapped.length + (cursorOffset ? cursorOffset - 1 : 0);
+    }
+
     onChange(newVal);
+    setShowSource(true);
     requestAnimationFrame(() => {
-      const pos = start + insert.length + (cursorOffset ?? 0);
-      ta.setSelectionRange(pos, pos);
+      ta.setSelectionRange(newPos, newPos);
       ta.focus();
     });
   };
 
   return (
     <div className={className}>
+      {/* rendered preview (main view) */}
+      <div className="border border-grain rounded-lg px-4 py-3 bg-paper min-h-[60px] mb-2">
+        {value ? (
+          <Latex text={value} className="text-[15px] text-ink leading-relaxed block whitespace-pre-wrap" />
+        ) : (
+          <span className="text-[14px] text-ink-muted">풀이과정이 여기에 표시됩니다</span>
+        )}
+      </div>
+
       {/* symbol toolbar */}
-      <div className="border border-grain rounded-lg p-2 mb-3 bg-grain/10">
-        <div className="flex flex-wrap gap-2">
-          {mathSymbols.map((group) => (
-            <div key={group.label} className="flex items-center gap-0.5">
-              <span className="text-[10px] font-mono text-ink-muted/70 w-12 shrink-0 text-right pr-1">{group.label}</span>
-              <div className="flex gap-0.5">
-                {group.items.map((sym) => (
-                  <button
-                    key={sym.insert}
-                    onClick={() => insertSymbol(sym.insert, (sym as any).cursor)}
-                    title={sym.insert}
-                    className="w-8 h-8 flex items-center justify-center rounded-md text-[15px] text-ink border border-transparent hover:border-grain hover:bg-paper transition-colors cursor-pointer font-mono"
-                  >
-                    {sym.display}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+      <div className="flex flex-wrap items-center gap-1 mb-2">
+        {mathSymbols.map((group) => (
+          <div key={group.label} className="flex items-center">
+            <div className="w-px h-4 bg-grain mx-1 first:hidden" />
+            {group.items.map((sym) => (
+              <button
+                key={sym.insert}
+                onClick={() => insertSymbol(sym.insert, (sym as any).cursor)}
+                title={`${group.label}: ${sym.display}`}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-[15px] text-ink hover:bg-grain/50 transition-colors cursor-pointer font-mono"
+              >
+                {sym.display}
+              </button>
+            ))}
+          </div>
+        ))}
+        <div className="ml-auto">
+          <button
+            onClick={() => setShowSource(!showSource)}
+            className={`text-[11px] font-mono px-2.5 py-1 rounded-md transition-colors cursor-pointer ${showSource ? 'bg-ink/10 text-ink' : 'text-ink-muted hover:text-ink'}`}
+          >
+            소스
+          </button>
         </div>
       </div>
-      {/* input */}
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="풀이과정을 입력하세요... ($수식$으로 수식 입력)"
-        rows={4}
-        className="w-full border border-grain rounded-lg px-4 py-3 font-mono text-[14px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
-      />
-      {/* preview */}
-      {value.includes('$') && (
-        <div className="mt-2 border border-grain/50 rounded-lg px-4 py-3 bg-grain/10">
-          <span className="text-[9px] font-mono text-ink-muted block mb-1">미리보기</span>
-          <Latex text={value} className="text-[14px] text-ink leading-relaxed block" />
-        </div>
+
+      {/* source input (collapsible) */}
+      {showSource && (
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="텍스트 입력... (수식은 $...$로 감싸기)"
+          rows={3}
+          className="w-full border border-grain rounded-lg px-4 py-3 font-mono text-[13px] text-ink-muted resize-none focus:outline-none focus:border-ink transition-colors"
+        />
       )}
     </div>
   );
