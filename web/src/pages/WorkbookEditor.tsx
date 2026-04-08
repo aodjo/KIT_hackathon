@@ -530,12 +530,12 @@ export default function WorkbookEditor() {
                 <p className="text-[13px] text-ink-muted">문제가 없습니다.</p>
               </div>
             ) : (
-              marketQuestions.map((q) => (
+              marketQuestions.filter((q) => !inWorkbook.has(q.id)).map((q) => (
                 <DraggableMarketCard
                   key={q.id}
                   q={q}
-                  added={inWorkbook.has(q.id)}
-                  onClick={() => !inWorkbook.has(q.id) && addQuestion(q)}
+                  added={false}
+                  onClick={() => addQuestion(q)}
                 />
               ))
             )}
