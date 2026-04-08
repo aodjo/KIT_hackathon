@@ -87,6 +87,8 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
   const isDown = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
   const offsetStart = useRef({ x: 0, y: 0 });
+  /** Touch pinch zoom state */
+  const pinchStart = useRef<{ dist: number; scale: number } | null>(null);
 
   /**
    * Convert screen coords to world coords.
@@ -111,15 +113,12 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = container.offsetWidth;
-    const h = container.offsetHeight;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${h}px`;
+    const rect = container.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext('2d')!;
-    ctx.scale(dpr, dpr);
     const s = scaleRef.current;
     const o = offsetRef.current;
 
@@ -186,8 +185,9 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
 
   /** Pointer down */
   const onDown = (e: React.PointerEvent) => {
+    e.preventDefault();
     isDown.current = true;
-    containerRef.current?.setPointerCapture(e.pointerId);
+    canvasRef.current?.setPointerCapture(e.pointerId);
 
     if (tool === 'pan') {
       panStart.current = { x: e.clientX, y: e.clientY };
@@ -195,17 +195,22 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
       return;
     }
 
+    /** Pressure-sensitive width */
+    const pressure = e.pressure > 0 && e.pressure < 1 ? e.pressure : 0.5;
+    const baseWidth = tool === 'eraser' ? penSize * 5 : penSize;
+
     undoStack.current.push([...strokes.current]);
     redoStack.current = [];
     current.current = {
       points: [toWorld(e)],
       color: tool === 'eraser' ? '#ffffff' : '#1a1a1a',
-      width: tool === 'eraser' ? penSize * 5 : penSize,
+      width: baseWidth * (0.5 + pressure),
     };
   };
 
   /** Pointer move */
   const onMove = (e: React.PointerEvent) => {
+    e.preventDefault();
     if (!isDown.current) return;
 
     if (tool === 'pan') {
@@ -224,7 +229,8 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
   };
 
   /** Pointer up */
-  const onUp = () => {
+  const onUp = (e: React.PointerEvent) => {
+    e.preventDefault();
     isDown.current = false;
     if (current.current && current.current.points.length >= 2) {
       strokes.current.push(current.current);
@@ -232,6 +238,49 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
     }
     current.current = null;
     render();
+  };
+
+  /** Touch pinch zoom + two-finger pan */
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchStart.current = { dist: Math.hypot(dx, dy), scale: scaleRef.current };
+      panStart.current = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+      };
+      offsetStart.current = { ...offsetRef.current };
+    }
+  };
+
+  /** Handle pinch move */
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchStart.current) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const newScale = Math.min(4, Math.max(0.5, pinchStart.current.scale * (dist / pinchStart.current.dist)));
+      scaleRef.current = newScale;
+      setScaleUI(newScale);
+
+      const mid = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+      };
+      offsetRef.current = {
+        x: offsetStart.current.x + (mid.x - panStart.current.x),
+        y: offsetStart.current.y + (mid.y - panStart.current.y),
+      };
+      render();
+    }
+  };
+
+  /** End pinch */
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) pinchStart.current = null;
   };
 
   /** Undo */
@@ -391,7 +440,10 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerLeave={onUp}
-          className={`absolute inset-0 touch-none ${
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          className={`absolute inset-0 w-full h-full touch-none ${
             tool === 'pan' ? 'cursor-grab active:cursor-grabbing' : tool === 'eraser' ? 'cursor-cell' : 'cursor-crosshair'
           }`}
         />
