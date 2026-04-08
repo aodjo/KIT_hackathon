@@ -472,6 +472,8 @@ export default function StudentAssignment() {
   const [workMode, setWorkMode] = useState<'draw' | 'type'>('draw');
   /** Fullscreen canvas mode */
   const [fullscreen, setFullscreen] = useState(false);
+  /** Fullscreen visible (for animation) */
+  const [fsVisible, setFsVisible] = useState(false);
   /** Typed work keyed by question ID */
   const [workText, setWorkText] = useState<Record<number, string>>({});
   /** Canvas strokes keyed by question ID */
@@ -529,6 +531,26 @@ export default function StudentAssignment() {
    */
   const goPrev = () => {
     if (currentIdx > 0) setCurrentIdx(currentIdx - 1);
+  };
+
+  /**
+   * Open fullscreen with animation.
+   *
+   * @return void
+   */
+  const openFullscreen = () => {
+    setFullscreen(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => setFsVisible(true)));
+  };
+
+  /**
+   * Close fullscreen with animation.
+   *
+   * @return void
+   */
+  const closeFullscreen = () => {
+    setFsVisible(false);
+    setTimeout(() => setFullscreen(false), 300);
   };
 
   /**
@@ -692,7 +714,7 @@ export default function StudentAssignment() {
                   <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">풀이과정</span>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setFullscreen(true)}
+                      onClick={openFullscreen}
                       title="최대화"
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer"
                     >
@@ -775,7 +797,9 @@ export default function StudentAssignment() {
 
       {/* fullscreen canvas overlay */}
       {fullscreen && q && (
-        <div className="fixed inset-0 z-50 bg-paper flex">
+        <div className={`fixed inset-0 z-50 bg-paper flex transition-all duration-300 ease-in-out ${
+          fsVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+        }`} style={{ transformOrigin: 'center bottom' }}>
           {/* left: question */}
           <div className="w-96 shrink-0 border-r border-grain overflow-y-auto p-6">
             <div className="flex items-center gap-2 mb-4">
@@ -860,7 +884,7 @@ export default function StudentAssignment() {
                 </div>
               </div>
               <button
-                onClick={() => setFullscreen(false)}
+                onClick={closeFullscreen}
                 title="축소"
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer"
               >
