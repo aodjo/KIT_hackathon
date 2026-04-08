@@ -47,6 +47,113 @@ function Latex({ text, className }: { text: string; className?: string }) {
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+/** Math symbol groups for equation editor */
+const mathSymbols = [
+  { label: '기본', items: [
+    { display: '÷', insert: '\\div ' },
+    { display: '×', insert: '\\times ' },
+    { display: '±', insert: '\\pm ' },
+    { display: '≠', insert: '\\neq ' },
+    { display: '≤', insert: '\\leq ' },
+    { display: '≥', insert: '\\geq ' },
+    { display: '∞', insert: '\\infty ' },
+  ]},
+  { label: '분수·근호', items: [
+    { display: '⬚/⬚', insert: '\\frac{}{}', cursor: -3 },
+    { display: '√', insert: '\\sqrt{}', cursor: -1 },
+    { display: 'xⁿ', insert: '^{}', cursor: -1 },
+    { display: 'x₋', insert: '_{}', cursor: -1 },
+  ]},
+  { label: '도형', items: [
+    { display: '∠', insert: '\\angle ' },
+    { display: '△', insert: '\\triangle ' },
+    { display: '∥', insert: '\\parallel ' },
+    { display: '⊥', insert: '\\perp ' },
+    { display: '°', insert: '^\\circ ' },
+    { display: '㎠', insert: '\\text{cm}^2 ' },
+  ]},
+  { label: '그리스', items: [
+    { display: 'π', insert: '\\pi ' },
+    { display: 'θ', insert: '\\theta ' },
+    { display: 'α', insert: '\\alpha ' },
+    { display: 'β', insert: '\\beta ' },
+  ]},
+];
+
+/**
+ * Math equation editor with toolbar and preview.
+ *
+ * @param props.value current text
+ * @param props.onChange text change handler
+ * @param props.className optional container class
+ * @return editor element
+ */
+function MathEditor({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Insert LaTeX at cursor position.
+   *
+   * @param insert text to insert
+   * @param cursorOffset offset from end of inserted text
+   * @return void
+   */
+  const insertSymbol = (insert: string, cursorOffset?: number) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    const newVal = before + insert + after;
+    onChange(newVal);
+    requestAnimationFrame(() => {
+      const pos = start + insert.length + (cursorOffset ?? 0);
+      ta.setSelectionRange(pos, pos);
+      ta.focus();
+    });
+  };
+
+  return (
+    <div className={className}>
+      {/* symbol toolbar */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2">
+        {mathSymbols.map((group) => (
+          <div key={group.label} className="flex items-center gap-0.5">
+            <span className="text-[9px] font-mono text-ink-muted mr-1">{group.label}</span>
+            {group.items.map((sym) => (
+              <button
+                key={sym.insert}
+                onClick={() => insertSymbol(sym.insert, (sym as any).cursor)}
+                title={sym.insert}
+                className="w-7 h-7 flex items-center justify-center rounded text-[13px] text-ink hover:bg-grain/50 transition-colors cursor-pointer font-mono"
+              >
+                {sym.display}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* input */}
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="풀이과정을 입력하세요... ($수식$으로 수식 입력)"
+        rows={4}
+        className="w-full border border-grain rounded-lg px-4 py-3 font-mono text-[14px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
+      />
+      {/* preview */}
+      {value.includes('$') && (
+        <div className="mt-2 border border-grain/50 rounded-lg px-4 py-3 bg-grain/10">
+          <span className="text-[9px] font-mono text-ink-muted block mb-1">미리보기</span>
+          <Latex text={value} className="text-[14px] text-ink leading-relaxed block" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Single stroke point */
 type Point = { x: number; y: number };
 
@@ -841,12 +948,9 @@ export default function StudentAssignment() {
                     setPenSize={setCanvasPenSize}
                   />
                 ) : (
-                  <textarea
+                  <MathEditor
                     value={workText[q.id] ?? ''}
-                    onChange={(e) => setWorkText((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                    placeholder="풀이과정을 입력하세요..."
-                    rows={5}
-                    className="w-full border border-grain rounded-lg px-4 py-3 font-mono text-[14px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
+                    onChange={(v) => setWorkText((prev) => ({ ...prev, [q.id]: v }))}
                   />
                 )}
               </div>
@@ -998,11 +1102,10 @@ export default function StudentAssignment() {
                   setPenSize={setCanvasPenSize}
                 />
               ) : (
-                <textarea
+                <MathEditor
                   value={workText[q.id] ?? ''}
-                  onChange={(e) => setWorkText((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                  placeholder="풀이과정을 입력하세요..."
-                  className="w-full h-full border border-grain rounded-lg px-4 py-3 font-mono text-[14px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
+                  onChange={(v) => setWorkText((prev) => ({ ...prev, [q.id]: v }))}
+                  className="h-full"
                 />
               )}
             </div>
