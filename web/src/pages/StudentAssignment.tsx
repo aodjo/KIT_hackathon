@@ -742,7 +742,11 @@ export default function StudentAssignment() {
                     </div>
                   </div>
                 </div>
-                {workMode === 'draw' ? (
+                {fullscreen ? (
+                  <div className="border border-dashed border-grain rounded-lg h-[60px] flex items-center justify-center">
+                    <span className="text-[12px] text-ink-muted">최대화 모드에서 편집 중</span>
+                  </div>
+                ) : workMode === 'draw' ? (
                   <DrawCanvas
                     key={q.id}
                     strokes={workDraw[q.id]}
@@ -898,7 +902,7 @@ export default function StudentAssignment() {
             <div className="flex-1 p-4 overflow-hidden min-h-0">
               {workMode === 'draw' ? (
                 <DrawCanvas
-                  key={`full-${q.id}`}
+                  key={q.id}
                   strokes={workDraw[q.id]}
                   onSave={(s) => setWorkDraw((prev) => ({ ...prev, [q.id]: s }))}
                 />
