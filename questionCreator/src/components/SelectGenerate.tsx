@@ -10,6 +10,7 @@ import {
 } from "../lib/curriculum.js";
 import { generateBatch } from "../lib/generator.js";
 import { GenerateProgress } from "./GenerateProgress.js";
+import { MultiSelect } from "./MultiSelect.js";
 import type { FlatConcept, GenerationProgress, CurriculumData } from "../types.js";
 import { PINK, CREAM, MUTED, LAVENDER } from "../lib/colors.js";
 
@@ -127,12 +128,12 @@ export function SelectGenerate({ onBack }: SelectGenerateProps): React.ReactElem
   const breadcrumb = [school, grade].filter(Boolean).join(" > ");
 
   /** Shared select indicator */
-  const indicator = ({ isSelected }: { isSelected: boolean }) => (
+  const indicator = ({ isSelected = false }: { isSelected?: boolean }) => (
     <Text color={PINK}>{isSelected ? " ❯ " : "   "}</Text>
   );
 
   /** Shared select item renderer */
-  const item = ({ isSelected, label }: { isSelected: boolean; label: string }) => (
+  const item = ({ isSelected = false, label }: { isSelected?: boolean; label: string }) => (
     <Text color={isSelected ? CREAM : MUTED}>{label}</Text>
   );
 
@@ -172,20 +173,14 @@ export function SelectGenerate({ onBack }: SelectGenerateProps): React.ReactElem
       {step === "concept" && (
         <>
           <Text color={CREAM}>개념을 선택하세요:</Text>
-          <SelectInput
+          <MultiSelect
             items={conceptItems}
-            onSelect={(i: SelectItem) => {
-              if (i.value === "__all__") {
-                setSelectedConcepts(allConcepts);
-              } else {
-                /** Matched concept */
-                const found = allConcepts.find((c) => c.id === i.value);
-                if (found) setSelectedConcepts([found]);
-              }
+            onSubmit={(ids) => {
+              /** Matched concepts from selected IDs */
+              const matched = allConcepts.filter((c) => ids.includes(c.id));
+              setSelectedConcepts(matched);
               setStep("input");
             }}
-            indicatorComponent={indicator}
-            itemComponent={item}
           />
         </>
       )}

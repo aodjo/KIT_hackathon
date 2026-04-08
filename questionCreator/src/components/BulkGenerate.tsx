@@ -79,6 +79,9 @@ export function BulkGenerate({ onBack }: BulkGenerateProps): React.ReactElement 
         <Box marginBottom={1}>
           <Text color={MUTED}>모든 개념에 대해 난이도별(상/중/하) 문제를 생성합니다.</Text>
         </Box>
+        <Box marginBottom={1}>
+          <Text color={MUTED}>1문제 = 객관식 1개 + 주관식 1개</Text>
+        </Box>
         <Box>
           <Text color={CREAM}>난이도별 문제 수: </Text>
           <TextInput

@@ -2,3 +2,6 @@ node_modules/
 dist/
 .env
 questions.db
+questions.db-shm
+questions.db-wal
+debug.log

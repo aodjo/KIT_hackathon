@@ -39,25 +39,6 @@ export type Difficulty = "상" | "중" | "하";
 /** Question type */
 export type QuestionType = "객관식" | "주관식";
 
-/** Generated question from Gemini */
-export interface GeneratedQuestion {
-  /** Question type */
-  type: QuestionType;
-  /** Question text */
-  question: string;
-  /** Choices for multiple choice (null for short answer) */
-  choices: string[] | null;
-  /** Correct answer */
-  answer: string;
-  /** Step-by-step explanation */
-  explanation: string;
-}
-
-/** Gemini API response shape */
-export interface GeminiResponse {
-  /** Array of generated questions */
-  questions: GeneratedQuestion[];
-}
 
 /** Database question row */
 export interface QuestionRow {

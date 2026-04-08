@@ -1,11 +1,69 @@
+import { z } from "zod";
 import { callGemini } from "./gemini.js";
 import { insertQuestions, type InsertQuestionParams } from "./db.js";
-import type {
-  FlatConcept,
-  Difficulty,
-  GeminiResponse,
-  GeneratedQuestion,
-} from "../types.js";
+import { debugLine } from "./debug.js";
+import type { FlatConcept, Difficulty } from "../types.js";
+
+/** Zod schema for choices object {"1":"...", "2":"...", ...} */
+const choicesSchema = z.object({
+  "1": z.string(),
+  "2": z.string(),
+  "3": z.string(),
+  "4": z.string(),
+  "5": z.string(),
+});
+
+/** Zod schema for a single generated question */
+const questionSchema = z.object({
+  type: z.enum(["객관식", "주관식"]),
+  question: z.string(),
+  choices: choicesSchema.nullable(),
+  answer: z.union([z.enum(["1", "2", "3", "4", "5"]), z.array(z.string())]),
+  explanation: z.string(),
+});
+
+/** Zod schema for validating Gemini response */
+const responseSchema = z.object({
+  questions: z.array(questionSchema),
+});
+
+/** Hand-written JSON schema for Gemini structured output */
+const RESPONSE_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    questions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["객관식", "주관식"], description: "객관식 or 주관식" },
+          question: { type: "string", description: "Question text in Korean" },
+          choices: {
+            type: ["object", "null"],
+            properties: {
+              "1": { type: "string", description: "Choice 1" },
+              "2": { type: "string", description: "Choice 2" },
+              "3": { type: "string", description: "Choice 3" },
+              "4": { type: "string", description: "Choice 4" },
+              "5": { type: "string", description: "Choice 5" },
+            },
+            required: ["1", "2", "3", "4", "5"],
+            description: "5 choices as object for 객관식, null for 주관식",
+          },
+          answer: {
+            oneOf: [
+              { type: "string", enum: ["1", "2", "3", "4", "5"], description: "Choice number for 객관식" },
+              { type: "array", items: { type: "string" }, description: "Answer array for 주관식" },
+            ],
+          },
+          explanation: { type: "string", description: "Step-by-step solution in Korean" },
+        },
+        required: ["type", "question", "choices", "answer", "explanation"],
+      },
+    },
+  },
+  required: ["questions"],
+};
 
 /** All difficulty levels */
 const DIFFICULTIES: Difficulty[] = ["하", "중", "상"];
@@ -17,129 +75,105 @@ const DIFFICULTY_DESC: Record<Difficulty, string> = {
   상: "어려움 (심화 응용, 복합 개념, 서술형 추론)",
 };
 
+/** Single topic unit for generation */
+interface TopicUnit {
+  /** Parent concept */
+  concept: FlatConcept;
+  /** Individual curriculum topic */
+  topic: string;
+}
+
 /**
- * Build a prompt for Gemini to generate math questions.
+ * Expand concepts into individual topic units.
  *
- * @param concept - Flat concept with full context
+ * @param concepts - Array of flat concepts
+ * @returns Array of topic units (one per curriculum topic)
+ */
+function expandTopics(concepts: FlatConcept[]): TopicUnit[] {
+  /** Accumulated topic units */
+  const units: TopicUnit[] = [];
+  for (const concept of concepts) {
+    for (const topic of concept.curriculum) {
+      units.push({ concept, topic });
+    }
+  }
+  return units;
+}
+
+/**
+ * Build a prompt for a single topic at a single difficulty.
+ *
+ * @param unit - Topic unit (concept + single topic)
  * @param difficulty - Difficulty level
- * @param count - Number of questions to generate
+ * @param pairCount - Number of question pairs
  * @returns Prompt string
  */
 function buildPrompt(
-  concept: FlatConcept,
+  unit: TopicUnit,
   difficulty: Difficulty,
-  count: number,
+  pairCount: number,
 ): string {
-  /** Number of multiple choice questions */
-  const mcCount = Math.ceil(count / 2);
-  /** Number of short answer questions */
-  const saCount = count - mcCount;
-
+  const { concept, topic } = unit;
   return `You are a Korean math question generator for the Korean K-12 education system.
 
-Generate exactly ${count} math questions with these specifications:
+Generate exactly ${pairCount} pairs of math questions. Each pair consists of 1 객관식 (multiple choice) + 1 주관식 (short answer) = ${pairCount * 2} questions total.
 
 **Context:**
 - School level: ${concept.schoolLevel}
 - Subject area: ${concept.domain}
 - Grade: ${concept.grade}
-- Concept ID: ${concept.id}
-- Topics: ${concept.curriculum.join(", ")}
+- Topic: ${topic}
 ${concept.requirements.length > 0 ? `- Prerequisite concepts: ${concept.requirements.join(", ")}` : ""}
 
 **Difficulty: ${difficulty} (${DIFFICULTY_DESC[difficulty]})**
 
 **Requirements:**
-- Generate ${mcCount} 객관식 (multiple choice) questions with exactly 5 options labeled ①, ②, ③, ④, ⑤
-- Generate ${saCount} 주관식 (short answer) questions
+- Generate ${pairCount} 객관식 (multiple choice) questions with exactly 5 options labeled ①, ②, ③, ④, ⑤
+- Generate ${pairCount} 주관식 (short answer) questions
+- Alternate: 객관식, 주관식, 객관식, 주관식, ...
+- All questions MUST be about "${topic}" specifically
 - All questions must be in Korean
 - Questions must strictly match the specified grade level and difficulty
-- Each question must test the listed curriculum topics
 - Provide clear, step-by-step explanations in Korean
-- For 객관식, the answer field must be the correct option label (e.g., "③")
-- For 주관식, the answer field must be the exact answer value
-
-Return ONLY valid JSON in this exact format:
-{
-  "questions": [
-    {
-      "type": "객관식",
-      "question": "question text here",
-      "choices": ["① option1", "② option2", "③ option3", "④ option4", "⑤ option5"],
-      "answer": "②",
-      "explanation": "step by step solution in Korean"
-    },
-    {
-      "type": "주관식",
-      "question": "question text here",
-      "choices": null,
-      "answer": "answer value",
-      "explanation": "step by step solution in Korean"
-    }
-  ]
-}`;
+- For 객관식: choices must be an object like {"1":"보기내용", "2":"보기내용", "3":"보기내용", "4":"보기내용", "5":"보기내용"}, answer must be the correct choice number as string (e.g., "3")
+- For 주관식: choices must be null, answer must be an array of strings (e.g., ["12", "3/4"])
+`;
 }
 
 /**
- * Parse Gemini response JSON into GeneratedQuestion array.
+ * Generate questions for a single topic at a single difficulty.
  *
- * @param raw - Raw JSON string from Gemini
- * @returns Parsed questions array
- */
-function parseResponse(raw: string): GeneratedQuestion[] {
-  /** Cleaned JSON string */
-  let cleaned = raw.trim();
-
-  if (cleaned.startsWith("```json")) {
-    cleaned = cleaned.slice(7);
-  }
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.slice(3);
-  }
-  if (cleaned.endsWith("```")) {
-    cleaned = cleaned.slice(0, -3);
-  }
-  cleaned = cleaned.trim();
-
-  /** Parsed response */
-  const parsed = JSON.parse(cleaned) as GeminiResponse;
-  return parsed.questions ?? [];
-}
-
-/**
- * Generate questions for a single concept at a single difficulty level.
- *
- * @param concept - Target concept
+ * @param unit - Topic unit
  * @param difficulty - Difficulty level
- * @param count - Number of questions
+ * @param pairCount - Number of question pairs
  * @returns Number of questions saved to DB
  */
-async function generateForDifficulty(
-  concept: FlatConcept,
+async function generateOne(
+  unit: TopicUnit,
   difficulty: Difficulty,
-  count: number,
+  pairCount: number,
 ): Promise<number> {
   /** Prompt for Gemini */
-  const prompt = buildPrompt(concept, difficulty, count);
+  const prompt = buildPrompt(unit, difficulty, pairCount);
 
-  /** Raw response from Gemini */
-  const raw = await callGemini(prompt);
+  /** Raw JSON response from Gemini */
+  const raw = await callGemini(prompt, RESPONSE_JSON_SCHEMA);
 
-  /** Parsed questions */
-  const questions = parseResponse(raw);
+  /** Validated response */
+  const parsed = responseSchema.parse(JSON.parse(raw));
 
   /** Database insert params */
-  const params: InsertQuestionParams[] = questions.map((q) => ({
-    concept_id: concept.id,
-    school_level: concept.schoolLevel,
-    domain: concept.domain,
-    grade: concept.grade,
-    curriculum_topic: concept.curriculum.join(", "),
+  const params: InsertQuestionParams[] = parsed.questions.map((q) => ({
+    concept_id: unit.concept.id,
+    school_level: unit.concept.schoolLevel,
+    domain: unit.concept.domain,
+    grade: unit.concept.grade,
+    curriculum_topic: unit.topic,
     difficulty,
     type: q.type,
     question: q.question,
     choices: q.choices ? JSON.stringify(q.choices) : null,
-    answer: q.answer,
+    answer: Array.isArray(q.answer) ? JSON.stringify(q.answer) : q.answer,
     explanation: q.explanation,
   }));
 
@@ -155,63 +189,46 @@ export type ProgressCallback = (
 ) => void;
 
 /**
- * Generate questions for a single concept across all difficulties.
- *
- * @param concept - Target concept
- * @param countPerDifficulty - Questions per difficulty level
- * @returns Total number of questions generated
- */
-export async function generateForConcept(
-  concept: FlatConcept,
-  countPerDifficulty: number,
-): Promise<number> {
-  /** Total generated count */
-  let total = 0;
-
-  for (const difficulty of DIFFICULTIES) {
-    try {
-      const count = await generateForDifficulty(concept, difficulty, countPerDifficulty);
-      total += count;
-    } catch (err) {
-      console.error(
-        `Failed to generate ${difficulty} questions for ${concept.id}: ${err}`,
-      );
-    }
-  }
-
-  return total;
-}
-
-/**
  * Generate questions for multiple concepts with progress tracking.
+ * Iterates per topic × per difficulty (total = topics * 3).
  *
  * @param concepts - Array of concepts to process
- * @param countPerDifficulty - Questions per difficulty level per concept
+ * @param pairCount - Pairs per difficulty per topic
  * @param onProgress - Progress callback
  * @returns Total number of questions generated
  */
 export async function generateBatch(
   concepts: FlatConcept[],
-  countPerDifficulty: number,
+  pairCount: number,
   onProgress?: ProgressCallback,
 ): Promise<number> {
+  /** Expanded topic units */
+  const units = expandTopics(concepts);
+  /** Total work items = topics × 3 difficulties */
+  const totalSteps = units.length * DIFFICULTIES.length;
+  /** Current step index */
+  let step = 0;
   /** Total questions generated */
   let totalGenerated = 0;
 
-  for (let i = 0; i < concepts.length; i++) {
-    /** Current concept */
-    const concept = concepts[i];
+  for (const unit of units) {
+    for (const difficulty of DIFFICULTIES) {
+      /** Progress label */
+      const label = `[${unit.concept.id}] ${unit.topic} (${difficulty})`;
 
-    /** Progress label */
-    const label = `[${concept.id}] ${concept.schoolLevel} ${concept.grade} - ${concept.curriculum.join(", ")}`;
+      onProgress?.(step, totalSteps, label, totalGenerated);
 
-    onProgress?.(i, concepts.length, label, totalGenerated);
+      try {
+        const count = await generateOne(unit, difficulty, pairCount);
+        totalGenerated += count;
+      } catch (err) {
+        debugLine(`[Error] ${label}: ${err}`);
+      }
 
-    /** Questions generated for this concept */
-    const count = await generateForConcept(concept, countPerDifficulty);
-    totalGenerated += count;
+      step++;
+    }
   }
 
-  onProgress?.(concepts.length, concepts.length, "완료", totalGenerated);
+  onProgress?.(totalSteps, totalSteps, "완료", totalGenerated);
   return totalGenerated;
 }
