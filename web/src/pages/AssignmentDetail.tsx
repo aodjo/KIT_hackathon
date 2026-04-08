@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
@@ -71,8 +71,6 @@ function Latex({ text, className }: { text: string; className?: string }) {
 export default function AssignmentDetail() {
   const { id, classId } = useParams<{ id: string; classId: string }>();
   const navigate = useNavigate();
-  /** Whether initial class load is done */
-  const initialLoad = useRef(true);
 
   /** Assignment data */
   const [assignment, setAssignment] = useState<Assignment | null>(null);
@@ -104,7 +102,7 @@ export default function AssignmentDetail() {
 
   if (!assignment) {
     return (
-      <AppLayout selectedClassId={classId} initialClassId={classId} onSelectClass={(cls) => { if (initialLoad.current) { initialLoad.current = false; return; } navigate(`/c/${cls.id}`); }}>
+      <AppLayout selectedClassId={classId} initialClassId={classId} onClickClass={(cls) => navigate(`/c/${cls.id}`)}>
         <div className="flex-1 flex items-center justify-center">
           <p className="text-[14px] text-ink-muted font-mono">로딩 중...</p>
         </div>
@@ -113,7 +111,7 @@ export default function AssignmentDetail() {
   }
 
   return (
-    <AppLayout selectedClassId={classId} initialClassId={classId} onSelectClass={(cls) => { if (initialLoad.current) { initialLoad.current = false; return; } navigate(`/c/${cls.id}`); }}>
+    <AppLayout selectedClassId={classId} initialClassId={classId} onClickClass={(cls) => navigate(`/c/${cls.id}`)}>
       <div className="flex-1 max-w-4xl w-full px-6 py-10">
         {/* header */}
         <div className="mb-8">

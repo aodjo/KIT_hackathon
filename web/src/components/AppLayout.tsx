@@ -34,11 +34,13 @@ export default function AppLayout({
   selectedClassId,
   initialClassId,
   onSelectClass,
+  onClickClass,
 }: {
   children: ReactNode;
   selectedClassId?: string | null;
   initialClassId?: string | null;
   onSelectClass?: (cls: ClassItem) => void;
+  onClickClass?: (cls: ClassItem) => void;
 }) {
   /** Current user */
   const user = getStoredUser();
@@ -182,7 +184,7 @@ export default function AppLayout({
           {classes.map((cls) => (
             <button
               key={cls.id}
-              onClick={() => onSelectClass?.(cls)}
+              onClick={() => onClickClass ? onClickClass(cls) : onSelectClass?.(cls)}
               className={`w-full text-left px-4 py-3 rounded-lg transition-colors cursor-pointer ${
                 selectedClassId === cls.id
                   ? 'bg-ink text-paper'
