@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { DndContext, DragOverlay, closestCenter, type DragStartEvent, type DragEndEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, closestCenter, pointerWithin, type DragStartEvent, type DragEndEvent, useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { IoIosArrowUp } from 'react-icons/io';
@@ -67,7 +67,13 @@ function SortableCard({ q, index, onRemove }: { q: Question; index: number; onRe
       className="border border-grain rounded-lg p-4 bg-paper cursor-grab active:cursor-grabbing"
     >
       <div className="flex items-start justify-between mb-2">
-        <span className="text-[12px] font-mono font-bold text-ink">{index}.</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] font-mono font-bold text-ink">{index}.</span>
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[q.difficulty] ?? ''}`}>
+            {q.difficulty}
+          </span>
+          <span className="text-[10px] font-mono text-ink-muted">{q.school_level} &gt; {q.grade} &gt; {q.curriculum_topic}</span>
+        </div>
         <button
           onClick={onRemove}
           className="text-ink-muted hover:text-red-500 transition-colors cursor-pointer text-[14px] leading-none"
@@ -88,12 +94,6 @@ function SortableCard({ q, index, onRemove }: { q: Question; index: number; onRe
           </div>
         );
       })()}
-      <div className="flex items-center gap-2 mt-2">
-        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[q.difficulty] ?? ''}`}>
-          {q.difficulty}
-        </span>
-        <span className="text-[10px] font-mono text-ink-muted">{q.type}</span>
-      </div>
     </div>
   );
 }
@@ -238,14 +238,34 @@ export default function WorkbookEditor() {
     setActiveId(event.active.id as number);
   };
 
+  /** Ref for left marketplace panel */
+  const marketplaceRef = useRef<HTMLDivElement>(null);
+
   /**
-   * Handle drag end for reordering.
+   * Handle drag end for reordering or removing.
    *
    * @param event drag end event
    * @return void
    */
   const handleDragEnd = async (event: DragEndEvent) => {
+    const dragId = activeId;
     setActiveId(null);
+
+    /** Check if dropped over the marketplace panel */
+    if (dragId && marketplaceRef.current && event.activatorEvent instanceof PointerEvent) {
+      const rect = marketplaceRef.current.getBoundingClientRect();
+      const pointer = (event as any).delta
+        ? {
+            x: (event.activatorEvent as PointerEvent).clientX + (event as any).delta.x,
+            y: (event.activatorEvent as PointerEvent).clientY + (event as any).delta.y,
+          }
+        : null;
+      if (pointer && pointer.x < rect.right) {
+        removeQuestion(dragId);
+        return;
+      }
+    }
+
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -285,13 +305,16 @@ export default function WorkbookEditor() {
 
   /** Active dragged question */
   const activeQuestion = activeId ? questions.find((q) => q.id === activeId) : null;
+  /** Active question index (1-based) */
+  const activeIndex = activeId ? questions.findIndex((q) => q.id === activeId) + 1 : 0;
 
   return (
     <div className="min-h-screen font-display bg-paper-grain flex flex-col">
       <Navbar />
+      <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex-1 flex">
         {/* left: marketplace */}
-        <div className="w-[480px] shrink-0 flex border-r border-grain">
+        <div ref={marketplaceRef} className={`w-[480px] shrink-0 flex border-r transition-colors ${activeId ? 'border-r-red-300 bg-red-50/30' : 'border-grain'}`}>
           {/* topic sidebar */}
           <nav className="w-44 shrink-0 border-r border-grain py-4 px-3 overflow-y-auto">
             <div className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono px-2 mb-3">
@@ -354,6 +377,11 @@ export default function WorkbookEditor() {
 
           {/* question list */}
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {selectedTopic && (
+              <div className="text-[11px] font-mono text-ink-muted mb-2">
+                {selectedTopic.school_level} &gt; {selectedTopic.grade} &gt; {selectedTopic.topic}
+              </div>
+            )}
             {!selectedTopic ? (
               <div className="text-center pt-12">
                 <p className="text-[13px] text-ink-muted">왼쪽에서 단원을 선택하세요.</p>
@@ -446,26 +474,47 @@ export default function WorkbookEditor() {
                 </p>
               </div>
             ) : (
-              <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-                <SortableContext items={questions.map((q) => q.id)} strategy={rectSortingStrategy}>
+              <SortableContext items={questions.map((q) => q.id)} strategy={rectSortingStrategy}>
                   <div className="grid grid-cols-2 gap-3">
                     {questions.map((q, i) => (
                       <SortableCard key={q.id} q={q} index={i + 1} onRemove={() => removeQuestion(q.id)} />
                     ))}
                   </div>
                 </SortableContext>
-                <DragOverlay>
-                  {activeQuestion && (
-                    <div className="border border-ink/20 rounded-lg p-4 bg-paper shadow-lg">
-                      <p className="text-[14px] text-ink line-clamp-2">{activeQuestion.question}</p>
-                    </div>
-                  )}
-                </DragOverlay>
-              </DndContext>
             )}
           </div>
         </div>
       </div>
+      <DragOverlay>
+        {activeQuestion && (
+          <div className="border border-grain rounded-lg p-4 bg-paper shadow-lg cursor-grabbing">
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-mono font-bold text-ink">{activeIndex}.</span>
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[activeQuestion.difficulty] ?? ''}`}>
+                  {activeQuestion.difficulty}
+                </span>
+                <span className="text-[10px] font-mono text-ink-muted">{activeQuestion.school_level} &gt; {activeQuestion.grade} &gt; {activeQuestion.curriculum_topic}</span>
+              </div>
+              <span className="text-ink-muted text-[14px] leading-none">×</span>
+            </div>
+            <p className="text-[13px] text-ink leading-relaxed">{activeQuestion.question}</p>
+            {activeQuestion.type === '객관식' && activeQuestion.choices && (() => {
+              const parsed = JSON.parse(activeQuestion.choices!) as Record<string, string>;
+              return (
+                <div className="mt-2 space-y-0.5">
+                  {Object.entries(parsed).map(([k, v]) => (
+                    <div key={k} className="text-[11px] text-ink-muted font-mono">
+                      {'①②③④⑤'[Number(k) - 1] ?? k} {v}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </DragOverlay>
+      </DndContext>
     </div>
   );
 }
