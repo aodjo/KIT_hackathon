@@ -117,22 +117,26 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
   return (
     <div className={className}>
       {/* symbol toolbar */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2">
-        {mathSymbols.map((group) => (
-          <div key={group.label} className="flex items-center gap-0.5">
-            <span className="text-[9px] font-mono text-ink-muted mr-1">{group.label}</span>
-            {group.items.map((sym) => (
-              <button
-                key={sym.insert}
-                onClick={() => insertSymbol(sym.insert, (sym as any).cursor)}
-                title={sym.insert}
-                className="w-7 h-7 flex items-center justify-center rounded text-[13px] text-ink hover:bg-grain/50 transition-colors cursor-pointer font-mono"
-              >
-                {sym.display}
-              </button>
-            ))}
-          </div>
-        ))}
+      <div className="border border-grain rounded-lg p-2 mb-3 bg-grain/10">
+        <div className="flex flex-wrap gap-2">
+          {mathSymbols.map((group) => (
+            <div key={group.label} className="flex items-center gap-0.5">
+              <span className="text-[10px] font-mono text-ink-muted/70 w-12 shrink-0 text-right pr-1">{group.label}</span>
+              <div className="flex gap-0.5">
+                {group.items.map((sym) => (
+                  <button
+                    key={sym.insert}
+                    onClick={() => insertSymbol(sym.insert, (sym as any).cursor)}
+                    title={sym.insert}
+                    className="w-8 h-8 flex items-center justify-center rounded-md text-[15px] text-ink border border-transparent hover:border-grain hover:bg-paper transition-colors cursor-pointer font-mono"
+                  >
+                    {sym.display}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
       {/* input */}
       <textarea
