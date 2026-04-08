@@ -1,9 +1,17 @@
 import { useState, useEffect, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 import { getStoredUser } from '../lib/auth';
 
 /** API base URL */
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
+
+/** Workbook item from API */
+type WorkbookItem = {
+  id: string;
+  name: string;
+  question_count: number;
+};
 
 /** Class item from API */
 type ClassItem = {
@@ -42,6 +50,14 @@ export default function AppLayout({
   const [joinCode, setJoinCode] = useState('');
   /** Creating state */
   const [creating, setCreating] = useState(false);
+  /** Teacher workbooks */
+  const [workbooks, setWorkbooks] = useState<WorkbookItem[]>([]);
+  /** Show create workbook modal */
+  const [showCreateWorkbook, setShowCreateWorkbook] = useState(false);
+  /** New workbook name */
+  const [newWorkbookName, setNewWorkbookName] = useState('');
+
+  const navigate = useNavigate();
 
   /**
    * Create a new class (teacher) or join by code (student).
@@ -110,6 +126,34 @@ export default function AppLayout({
       .catch(() => {});
   }, [user?.id, user?.role]);
 
+  /** Fetch workbooks for teacher */
+  useEffect(() => {
+    if (!user || user.role !== 'teacher') return;
+    fetch(`${API}/api/workbooks/teacher/${user.id}`)
+      .then((r) => r.json())
+      .then((d) => setWorkbooks(d.workbooks ?? []))
+      .catch(() => {});
+  }, [user?.id, user?.role]);
+
+  /**
+   * Create a new workbook.
+   *
+   * @return void
+   */
+  const handleCreateWorkbook = async () => {
+    if (!newWorkbookName.trim() || !user) return;
+    const res = await fetch(`${API}/api/workbooks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teacherId: user.id, name: newWorkbookName.trim() }),
+    });
+    const data = await res.json();
+    setWorkbooks((prev) => [{ id: data.id, name: data.name, question_count: 0 }, ...prev]);
+    setNewWorkbookName('');
+    setShowCreateWorkbook(false);
+    navigate(`/workbook/${data.id}`);
+  };
+
   return (
     <div className="min-h-screen font-display bg-paper-grain flex flex-col">
       <Navbar />
@@ -154,6 +198,40 @@ export default function AppLayout({
               </div>
             </button>
           ))}
+
+          {/* workbooks section (teacher only) */}
+          {user?.role === 'teacher' && (
+            <>
+              <div className="flex items-center justify-between mt-6 mb-4">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono leading-none">
+                  문제집
+                </div>
+                <button
+                  onClick={() => setShowCreateWorkbook(true)}
+                  className="w-5 h-5 flex items-center justify-center rounded text-clay-deep hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer text-[14px] leading-none"
+                >
+                  +
+                </button>
+              </div>
+              {workbooks.length === 0 && (
+                <p className="text-[13px] text-ink-muted">문제집이 없습니다.</p>
+              )}
+              {workbooks.map((wb) => (
+                <button
+                  key={wb.id}
+                  onClick={() => navigate(`/workbook/${wb.id}`)}
+                  className="w-full text-left px-4 py-3 rounded-lg transition-colors cursor-pointer hover:bg-grain/50"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[15px] font-medium">{wb.name}</span>
+                    <span className="text-[11px] font-mono text-ink-muted">
+                      {wb.question_count}문제
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </>
+          )}
         </aside>
 
         {/* main content */}
@@ -227,6 +305,45 @@ export default function AppLayout({
                   : user?.role === 'teacher'
                     ? '만들기'
                     : '가입'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* create workbook modal */}
+      {showCreateWorkbook && (
+        <div className="fixed inset-0 bg-ink/30 flex items-center justify-center z-50" onClick={() => setShowCreateWorkbook(false)}>
+          <div className="bg-paper rounded-lg p-8 w-full max-w-sm shadow-paper-lg" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-display text-[20px] text-ink mb-6">문제집 만들기</h2>
+            <div>
+              <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
+                이름
+              </label>
+              <input
+                type="text"
+                value={newWorkbookName}
+                onChange={(e) => setNewWorkbookName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreateWorkbook();
+                }}
+                placeholder="예: 중1 일차함수 문제집"
+                className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => setShowCreateWorkbook(false)}
+                className="h-10 px-5 rounded-full text-[13px] font-medium text-ink hover:bg-grain/50 transition-colors cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleCreateWorkbook}
+                className="h-10 px-5 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors cursor-pointer"
+              >
+                만들기
               </button>
             </div>
           </div>

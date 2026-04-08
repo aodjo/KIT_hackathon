@@ -195,7 +195,6 @@ export default function Dashboard() {
           </div>
         ) : (
           <>
-
             {/* assignments list */}
             {assignments.length === 0 ? (
               <div className="border border-grain rounded-lg p-8 text-center">

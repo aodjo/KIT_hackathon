@@ -4,6 +4,8 @@ import type { Env } from './db/types';
 import auth from './routes/auth';
 import classes from './routes/classes';
 import assignments from './routes/assignments';
+import questions from './routes/questions';
+import workbooks from './routes/workbooks';
 
 /** Hono app instance */
 const app = new Hono<{ Bindings: Env }>();
@@ -15,6 +17,8 @@ app.use('/api/*', cors({ origin: '*' }));
 app.route('/api/auth', auth);
 app.route('/api/classes', classes);
 app.route('/api/assignments', assignments);
+app.route('/api/questions', questions);
+app.route('/api/workbooks', workbooks);
 
 /**
  * Health check endpoint.
