@@ -69,7 +69,7 @@ function Latex({ text, className }: { text: string; className?: string }) {
  * @return detail page element
  */
 export default function AssignmentDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { id, classId } = useParams<{ id: string; classId: string }>();
   const navigate = useNavigate();
 
   /** Assignment data */
@@ -102,7 +102,7 @@ export default function AssignmentDetail() {
 
   if (!assignment) {
     return (
-      <AppLayout onSelectClass={(cls) => navigate(`/c/${cls.id}`)}>
+      <AppLayout selectedClassId={classId} initialClassId={classId} onSelectClass={(cls) => { if (cls.id !== classId) navigate(`/c/${cls.id}`); }}>
         <div className="flex-1 flex items-center justify-center">
           <p className="text-[14px] text-ink-muted font-mono">로딩 중...</p>
         </div>
@@ -111,12 +111,12 @@ export default function AssignmentDetail() {
   }
 
   return (
-    <AppLayout onSelectClass={(cls) => navigate(`/c/${cls.id}`)}>
+    <AppLayout selectedClassId={classId} initialClassId={classId} onSelectClass={(cls) => { if (cls.id !== classId) navigate(`/c/${cls.id}`); }}>
       <div className="flex-1 max-w-4xl w-full px-6 py-10">
         {/* header */}
         <div className="mb-8">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(`/c/${classId}`)}
             className="text-ink-muted hover:text-ink transition-colors cursor-pointer text-[14px] mb-4 block"
           >
             ← 돌아가기

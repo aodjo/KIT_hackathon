@@ -238,7 +238,7 @@ export default function Dashboard() {
                 {assignments.map((a) => (
                   <div
                     key={a.id}
-                    onClick={() => navigate(`/assignment/${a.id}`)}
+                    onClick={() => navigate(`/c/${selectedClass!.id}/a/${a.id}`)}
                     className="border border-grain rounded-lg p-5 hover:border-ink/30 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start justify-between">

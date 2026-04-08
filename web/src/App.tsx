@@ -159,9 +159,9 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RootPage />} />
         <Route path="/c/:classId" element={<Dashboard />} />
+        <Route path="/c/:classId/a/:id" element={<AssignmentDetail />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/workbook/:id" element={<WorkbookEditor />} />
-        <Route path="/assignment/:id" element={<AssignmentDetail />} />
         <Route path="/articles" element={<Articles />} />
         <Route path="/articles/date/:date" element={<Articles />} />
         <Route path="/articles/:slug" element={<Article />} />
