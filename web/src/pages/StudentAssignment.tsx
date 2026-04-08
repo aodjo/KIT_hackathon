@@ -350,9 +350,9 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height }: { strokes?: Strok
   );
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       {/* toolbar */}
-      <div className="flex items-center gap-1 mb-2 px-1">
+      <div className="flex items-center gap-1 mb-2 px-1 shrink-0">
         {/* drawing tools */}
         <ToolBtn active={tool === 'pen'} onClick={() => setTool('pen')} title="펜">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -431,7 +431,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height }: { strokes?: Strok
       <div
         ref={containerRef}
         onWheel={onWheel}
-        className={`relative overflow-hidden border border-grain rounded-lg bg-white ${height == null ? 'flex-1' : ''}`}
+        className={`relative overflow-hidden border border-grain rounded-lg bg-white ${height != null ? '' : 'flex-1 min-h-0'}`}
         style={height != null ? { height } : undefined}
       >
         <canvas
@@ -871,7 +871,7 @@ export default function StudentAssignment() {
             </div>
 
             {/* canvas area */}
-            <div className="flex-1 flex flex-col p-4 min-h-0">
+            <div className="flex-1 p-4 overflow-hidden min-h-0">
               {workMode === 'draw' ? (
                 <DrawCanvas
                   key={`full-${q.id}`}
