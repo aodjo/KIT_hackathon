@@ -279,69 +279,8 @@ export default function WorkbookEditor() {
     <div className="min-h-screen font-display bg-paper-grain flex flex-col">
       <Navbar />
       <div className="flex-1 flex">
-        {/* left: workbook questions */}
-        <div className="flex-1 border-r border-grain flex flex-col">
-          <div className="px-6 py-5 border-b border-grain">
-            <div className="flex items-center gap-3 mb-3">
-              <button
-                onClick={() => navigate(-1)}
-                className="text-ink-muted hover:text-ink transition-colors cursor-pointer text-[14px]"
-              >
-                ← 돌아가기
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onBlur={handleSaveName}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveName();
-                }}
-                className="font-display text-[24px] text-ink bg-transparent border-none outline-none flex-1"
-              />
-              {editName.trim() !== name && (
-                <button
-                  onClick={handleSaveName}
-                  disabled={savingName}
-                  className="text-[12px] text-ink-muted hover:text-ink cursor-pointer"
-                >
-                  {savingName ? '저장 중...' : '저장'}
-                </button>
-              )}
-            </div>
-            <p className="text-[12px] text-ink-muted font-mono mt-1">{questions.length}문제</p>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 space-y-2">
-            {questions.length === 0 ? (
-              <div className="border border-dashed border-grain rounded-lg p-8 text-center">
-                <p className="text-[14px] text-ink-muted">
-                  오른쪽에서 문제를 클릭하여 추가하세요.
-                </p>
-              </div>
-            ) : (
-              <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-                <SortableContext items={questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
-                  {questions.map((q) => (
-                    <SortableCard key={q.id} q={q} onRemove={() => removeQuestion(q.id)} />
-                  ))}
-                </SortableContext>
-                <DragOverlay>
-                  {activeQuestion && (
-                    <div className="border border-ink/20 rounded-lg p-4 bg-paper shadow-lg">
-                      <p className="text-[14px] text-ink line-clamp-2">{activeQuestion.question}</p>
-                    </div>
-                  )}
-                </DragOverlay>
-              </DndContext>
-            )}
-          </div>
-        </div>
-
-        {/* right: marketplace */}
-        <div className="w-[480px] shrink-0 flex">
+        {/* left: marketplace */}
+        <div className="w-[480px] shrink-0 flex border-r border-grain">
           {/* topic sidebar */}
           <nav className="w-44 shrink-0 border-r border-grain py-4 px-3 overflow-y-auto">
             <div className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono px-2 mb-3">
@@ -435,6 +374,67 @@ export default function WorkbookEditor() {
                   </div>
                 );
               })
+            )}
+          </div>
+        </div>
+
+        {/* right: workbook questions */}
+        <div className="flex-1 flex flex-col">
+          <div className="px-6 py-5 border-b border-grain">
+            <div className="flex items-center gap-3 mb-3">
+              <button
+                onClick={() => navigate(-1)}
+                className="text-ink-muted hover:text-ink transition-colors cursor-pointer text-[14px]"
+              >
+                ← 돌아가기
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={handleSaveName}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveName();
+                }}
+                className="font-display text-[24px] text-ink bg-transparent border-none outline-none flex-1"
+              />
+              {editName.trim() !== name && (
+                <button
+                  onClick={handleSaveName}
+                  disabled={savingName}
+                  className="text-[12px] text-ink-muted hover:text-ink cursor-pointer"
+                >
+                  {savingName ? '저장 중...' : '저장'}
+                </button>
+              )}
+            </div>
+            <p className="text-[12px] text-ink-muted font-mono mt-1">{questions.length}문제</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-2">
+            {questions.length === 0 ? (
+              <div className="border border-dashed border-grain rounded-lg p-8 text-center">
+                <p className="text-[14px] text-ink-muted">
+                  왼쪽에서 문제를 클릭하여 추가하세요.
+                </p>
+              </div>
+            ) : (
+              <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+                <SortableContext items={questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
+                  {questions.map((q) => (
+                    <SortableCard key={q.id} q={q} onRemove={() => removeQuestion(q.id)} />
+                  ))}
+                </SortableContext>
+                <DragOverlay>
+                  {activeQuestion && (
+                    <div className="border border-ink/20 rounded-lg p-4 bg-paper shadow-lg">
+                      <p className="text-[14px] text-ink line-clamp-2">{activeQuestion.question}</p>
+                    </div>
+                  )}
+                </DragOverlay>
+              </DndContext>
             )}
           </div>
         </div>
