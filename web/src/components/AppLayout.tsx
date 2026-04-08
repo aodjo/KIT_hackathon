@@ -97,7 +97,7 @@ export default function AppLayout({
         const res = await fetch(`${API}/api/classes/join`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id, code: joinCode.trim() }),
+          body: JSON.stringify({ studentId: user.id, code: joinCode.trim() }),
         });
         if (res.ok) {
           const data = await res.json();
