@@ -60,7 +60,15 @@ type Stroke = { points: Point[]; color: string; width: number };
  * @param props.onSave callback when strokes change
  * @return canvas element
  */
-function DrawCanvas({ strokes: savedStrokes, onSave, height }: { strokes?: Stroke[]; onSave: (strokes: Stroke[]) => void; height?: number }) {
+function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penSize, setPenSize }: {
+  strokes?: Stroke[];
+  onSave: (strokes: Stroke[]) => void;
+  height?: number;
+  tool: 'pen' | 'eraser' | 'pan';
+  setTool: (t: 'pen' | 'eraser' | 'pan') => void;
+  penSize: number;
+  setPenSize: (s: number) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -78,10 +86,6 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height }: { strokes?: Strok
   const offsetRef = useRef({ x: 0, y: 0 });
   /** State mirrors for UI re-render */
   const [scaleUI, setScaleUI] = useState(1);
-  /** Active tool */
-  const [tool, setTool] = useState<'pen' | 'eraser' | 'pan'>('pen');
-  /** Pen width */
-  const [penSize, setPenSize] = useState(2);
 
   /** Drawing state refs */
   const isDown = useRef(false);
@@ -470,6 +474,10 @@ export default function StudentAssignment() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   /** Work/solution mode per question ('draw' or 'type') */
   const [workMode, setWorkMode] = useState<'draw' | 'type'>('draw');
+  /** Canvas tool */
+  const [canvasTool, setCanvasTool] = useState<'pen' | 'eraser' | 'pan'>('pen');
+  /** Canvas pen size */
+  const [canvasPenSize, setCanvasPenSize] = useState(2);
   /** Fullscreen canvas mode */
   const [fullscreen, setFullscreen] = useState(false);
   /** Fullscreen visible (for animation) */
@@ -752,6 +760,10 @@ export default function StudentAssignment() {
                     strokes={workDraw[q.id]}
                     onSave={(s) => setWorkDraw((prev) => ({ ...prev, [q.id]: s }))}
                     height={240}
+                    tool={canvasTool}
+                    setTool={setCanvasTool}
+                    penSize={canvasPenSize}
+                    setPenSize={setCanvasPenSize}
                   />
                 ) : (
                   <textarea
@@ -905,6 +917,10 @@ export default function StudentAssignment() {
                   key={q.id}
                   strokes={workDraw[q.id]}
                   onSave={(s) => setWorkDraw((prev) => ({ ...prev, [q.id]: s }))}
+                  tool={canvasTool}
+                  setTool={setCanvasTool}
+                  penSize={canvasPenSize}
+                  setPenSize={setCanvasPenSize}
                 />
               ) : (
                 <textarea
