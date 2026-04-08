@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DndContext, DragOverlay, closestCenter, type DragStartEvent, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { IoIosArrowUp } from 'react-icons/io';
 import Navbar from '../components/Navbar';
 
 /** API base URL */
@@ -46,7 +47,7 @@ const diffColor: Record<string, string> = {
  * @param props.onRemove remove callback
  * @return sortable card element
  */
-function SortableCard({ q, onRemove }: { q: Question; onRemove: () => void }) {
+function SortableCard({ q, index, onRemove }: { q: Question; index: number; onRemove: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: q.id,
   });
@@ -58,30 +59,40 @@ function SortableCard({ q, onRemove }: { q: Question; onRemove: () => void }) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="border border-grain rounded-lg p-4 bg-paper">
-      <div className="flex items-start gap-3">
-        <div {...attributes} {...listeners} className="cursor-grab mt-1 text-ink-muted hover:text-ink">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-            <circle cx="3" cy="2" r="1.2" /><circle cx="9" cy="2" r="1.2" />
-            <circle cx="3" cy="6" r="1.2" /><circle cx="9" cy="6" r="1.2" />
-            <circle cx="3" cy="10" r="1.2" /><circle cx="9" cy="10" r="1.2" />
-          </svg>
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[14px] text-ink leading-relaxed line-clamp-2">{q.question}</p>
-          <div className="flex items-center gap-2 mt-2">
-            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[q.difficulty] ?? ''}`}>
-              {q.difficulty}
-            </span>
-            <span className="text-[10px] font-mono text-ink-muted">{q.type}</span>
-          </div>
-        </div>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="border border-grain rounded-lg p-4 bg-paper cursor-grab active:cursor-grabbing"
+    >
+      <div className="flex items-start justify-between mb-2">
+        <span className="text-[12px] font-mono font-bold text-ink">{index}.</span>
         <button
           onClick={onRemove}
-          className="text-ink-muted hover:text-red-500 transition-colors cursor-pointer shrink-0 text-[16px] leading-none"
+          className="text-ink-muted hover:text-red-500 transition-colors cursor-pointer text-[14px] leading-none"
         >
           ×
         </button>
+      </div>
+      <p className="text-[13px] text-ink leading-relaxed">{q.question}</p>
+      {q.type === '객관식' && q.choices && (() => {
+        const parsed = JSON.parse(q.choices) as Record<string, string>;
+        return (
+          <div className="mt-2 space-y-0.5">
+            {Object.entries(parsed).map(([k, v]) => (
+              <div key={k} className="text-[11px] text-ink-muted font-mono">
+                {'①②③④⑤'[Number(k) - 1] ?? k} {v}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+      <div className="flex items-center gap-2 mt-2">
+        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[q.difficulty] ?? ''}`}>
+          {q.difficulty}
+        </span>
+        <span className="text-[10px] font-mono text-ink-muted">{q.type}</span>
       </div>
     </div>
   );
@@ -291,9 +302,10 @@ export default function WorkbookEditor() {
                 <div key={level}>
                   <button
                     onClick={() => setExpandedLevel(expandedLevel === level ? null : level)}
-                    className="w-full text-left px-2 py-1.5 rounded text-[13px] font-medium text-ink hover:bg-grain/50 transition-colors cursor-pointer"
+                    className="w-full text-left px-2 py-1.5 rounded text-[13px] font-medium text-ink hover:bg-grain/50 transition-colors cursor-pointer flex items-center justify-between"
                   >
                     {level}
+                    <IoIosArrowUp className={`text-[12px] text-ink-muted transition-transform ${expandedLevel === level ? '' : 'rotate-180'}`} />
                   </button>
                   {expandedLevel === level && (
                     <div className="ml-2 space-y-0.5">
@@ -301,9 +313,10 @@ export default function WorkbookEditor() {
                         <div key={grade}>
                           <button
                             onClick={() => setExpandedGrade(expandedGrade === grade ? null : grade)}
-                            className="w-full text-left px-2 py-1.5 rounded text-[12px] text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer"
+                            className="w-full text-left px-2 py-1.5 rounded text-[12px] text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer flex items-center justify-between"
                           >
                             {grade}
+                            <IoIosArrowUp className={`text-[12px] text-ink-muted transition-transform ${expandedGrade === grade ? '' : 'rotate-180'}`} />
                           </button>
                           {expandedGrade === grade && (
                             <div className="ml-2 space-y-0.5">
@@ -364,6 +377,18 @@ export default function WorkbookEditor() {
                     }`}
                   >
                     <p className="text-[13px] text-ink leading-relaxed line-clamp-2">{q.question}</p>
+                    {q.type === '객관식' && q.choices && (() => {
+                      const parsed = JSON.parse(q.choices) as Record<string, string>;
+                      return (
+                        <div className="mt-2 space-y-0.5">
+                          {Object.entries(parsed).map(([k, v]) => (
+                            <div key={k} className="text-[11px] text-ink-muted font-mono">
+                              {'①②③④⑤'[Number(k) - 1] ?? k} {v}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     <div className="flex items-center gap-2 mt-2">
                       <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffColor[q.difficulty] ?? ''}`}>
                         {q.difficulty}
@@ -378,8 +403,8 @@ export default function WorkbookEditor() {
           </div>
         </div>
 
-        {/* right: workbook questions */}
-        <div className="flex-1 flex flex-col">
+        {/* right: workbook questions (exam paper layout) */}
+        <div className="flex-1 flex flex-col max-w-4xl">
           <div className="px-6 py-5 border-b border-grain">
             <div className="flex items-center gap-3 mb-3">
               <button
@@ -413,7 +438,7 @@ export default function WorkbookEditor() {
             <p className="text-[12px] text-ink-muted font-mono mt-1">{questions.length}문제</p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-2">
+          <div className="flex-1 overflow-y-auto p-6">
             {questions.length === 0 ? (
               <div className="border border-dashed border-grain rounded-lg p-8 text-center">
                 <p className="text-[14px] text-ink-muted">
@@ -422,10 +447,12 @@ export default function WorkbookEditor() {
               </div>
             ) : (
               <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-                <SortableContext items={questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
-                  {questions.map((q) => (
-                    <SortableCard key={q.id} q={q} onRemove={() => removeQuestion(q.id)} />
-                  ))}
+                <SortableContext items={questions.map((q) => q.id)} strategy={rectSortingStrategy}>
+                  <div className="grid grid-cols-2 gap-3">
+                    {questions.map((q, i) => (
+                      <SortableCard key={q.id} q={q} index={i + 1} onRemove={() => removeQuestion(q.id)} />
+                    ))}
+                  </div>
                 </SortableContext>
                 <DragOverlay>
                   {activeQuestion && (
