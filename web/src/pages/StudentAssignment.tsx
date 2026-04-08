@@ -221,6 +221,28 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
     return () => obs.disconnect();
   }, []);
 
+  /** Whether eraser removed strokes (for undo snapshot) */
+  const eraserDirty = useRef(false);
+
+  /**
+   * Check if a point is near any stroke and remove it.
+   *
+   * @param p world-space point
+   * @return void
+   */
+  const eraseAt = (p: Point) => {
+    const threshold = penSize * 5;
+    const before = strokes.current.length;
+    strokes.current = strokes.current.filter((s) =>
+      !s.points.some((sp) => Math.hypot(sp.x - p.x, sp.y - p.y) < threshold + s.width)
+    );
+    if (strokes.current.length < before) {
+      eraserDirty.current = true;
+      onSave(strokes.current);
+      render();
+    }
+  };
+
   /** Pointer down */
   const onDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -233,16 +255,23 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
       return;
     }
 
+    if (tool === 'eraser') {
+      undoStack.current.push([...strokes.current]);
+      redoStack.current = [];
+      eraserDirty.current = false;
+      eraseAt(toWorld(e));
+      return;
+    }
+
     /** Pressure-sensitive width */
     const pressure = e.pressure > 0 && e.pressure < 1 ? e.pressure : 0.5;
-    const baseWidth = tool === 'eraser' ? penSize * 5 : penSize;
 
     undoStack.current.push([...strokes.current]);
     redoStack.current = [];
     current.current = {
       points: [toWorld(e)],
-      color: tool === 'eraser' ? '#ffffff' : '#1a1a1a',
-      width: baseWidth * (0.5 + pressure),
+      color: '#1a1a1a',
+      width: penSize * (0.5 + pressure),
     };
   };
 
@@ -260,6 +289,11 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
       return;
     }
 
+    if (tool === 'eraser') {
+      eraseAt(toWorld(e));
+      return;
+    }
+
     if (current.current) {
       current.current.points.push(toWorld(e));
       render();
@@ -270,6 +304,12 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
   const onUp = (e: React.PointerEvent) => {
     e.preventDefault();
     isDown.current = false;
+
+    if (tool === 'eraser') {
+      if (!eraserDirty.current) undoStack.current.pop();
+      return;
+    }
+
     if (current.current && current.current.points.length >= 2) {
       strokes.current.push(current.current);
       onSave(strokes.current);
