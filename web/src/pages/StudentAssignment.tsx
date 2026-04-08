@@ -73,15 +73,15 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
   /** Redo stack */
   const redoStack = useRef<Stroke[][]>([]);
 
-  /** View transform */
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  /** View transform (refs for real-time access) */
+  const scaleRef = useRef(1);
+  const offsetRef = useRef({ x: 0, y: 0 });
+  /** State mirrors for UI re-render */
+  const [scaleUI, setScaleUI] = useState(1);
   /** Active tool */
   const [tool, setTool] = useState<'pen' | 'eraser' | 'pan'>('pen');
   /** Pen width */
   const [penSize, setPenSize] = useState(2);
-  /** Undo/redo count for re-render trigger */
-  const [revision, setRevision] = useState(0);
 
   /** Drawing state refs */
   const isDown = useRef(false);
@@ -94,20 +94,20 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
    * @param e pointer event
    * @return world-space point
    */
-  const toWorld = useCallback((e: React.PointerEvent): Point => {
+  const toWorld = (e: React.PointerEvent): Point => {
     const rect = containerRef.current!.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left - offset.x) / scale,
-      y: (e.clientY - rect.top - offset.y) / scale,
+      x: (e.clientX - rect.left - offsetRef.current.x) / scaleRef.current,
+      y: (e.clientY - rect.top - offsetRef.current.y) / scaleRef.current,
     };
-  }, [scale, offset]);
+  };
 
   /**
    * Render all strokes to canvas.
    *
    * @return void
    */
-  const render = useCallback(() => {
+  const render = () => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
@@ -120,24 +120,26 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
     canvas.style.height = `${h}px`;
     const ctx = canvas.getContext('2d')!;
     ctx.scale(dpr, dpr);
+    const s = scaleRef.current;
+    const o = offsetRef.current;
 
     /** Clear */
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
 
     ctx.save();
-    ctx.translate(offset.x, offset.y);
-    ctx.scale(scale, scale);
+    ctx.translate(o.x, o.y);
+    ctx.scale(s, s);
 
     /** Draw grid when zoomed */
-    if (scale > 1.2) {
+    if (s > 1.2) {
       const gridSize = 20;
       ctx.strokeStyle = '#f0ede8';
-      ctx.lineWidth = 0.5 / scale;
-      const startX = Math.floor(-offset.x / scale / gridSize) * gridSize;
-      const startY = Math.floor(-offset.y / scale / gridSize) * gridSize;
-      const endX = startX + w / scale + gridSize;
-      const endY = startY + h / scale + gridSize;
+      ctx.lineWidth = 0.5 / s;
+      const startX = Math.floor(-o.x / s / gridSize) * gridSize;
+      const startY = Math.floor(-o.y / s / gridSize) * gridSize;
+      const endX = startX + w / s + gridSize;
+      const endY = startY + h / s + gridSize;
       for (let x = startX; x < endX; x += gridSize) {
         ctx.beginPath();
         ctx.moveTo(x, startY);
@@ -155,34 +157,32 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
     /** Draw strokes */
     const all = [...strokes.current];
     if (current.current) all.push(current.current);
-    for (const s of all) {
-      if (s.points.length < 2) continue;
+    for (const st of all) {
+      if (st.points.length < 2) continue;
       ctx.beginPath();
-      ctx.moveTo(s.points[0].x, s.points[0].y);
-      for (let i = 1; i < s.points.length; i++) {
-        const p0 = s.points[i - 1];
-        const p1 = s.points[i];
+      ctx.moveTo(st.points[0].x, st.points[0].y);
+      for (let i = 1; i < st.points.length; i++) {
+        const p0 = st.points[i - 1];
+        const p1 = st.points[i];
         ctx.quadraticCurveTo(p0.x, p0.y, (p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
       }
-      ctx.strokeStyle = s.color;
-      ctx.lineWidth = s.width;
+      ctx.strokeStyle = st.color;
+      ctx.lineWidth = st.width;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.stroke();
     }
 
     ctx.restore();
-  }, [scale, offset, revision]);
+  };
 
-  /** Re-render on state change */
-  useEffect(() => { render(); }, [render]);
-
-  /** Resize observer */
+  /** Initial render + resize */
   useEffect(() => {
+    render();
     const obs = new ResizeObserver(() => render());
     if (containerRef.current) obs.observe(containerRef.current);
     return () => obs.disconnect();
-  }, [render]);
+  }, []);
 
   /** Pointer down */
   const onDown = (e: React.PointerEvent) => {
@@ -191,7 +191,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
 
     if (tool === 'pan') {
       panStart.current = { x: e.clientX, y: e.clientY };
-      offsetStart.current = { ...offset };
+      offsetStart.current = { ...offsetRef.current };
       return;
     }
 
@@ -209,10 +209,11 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
     if (!isDown.current) return;
 
     if (tool === 'pan') {
-      setOffset({
+      offsetRef.current = {
         x: offsetStart.current.x + (e.clientX - panStart.current.x),
         y: offsetStart.current.y + (e.clientY - panStart.current.y),
-      });
+      };
+      render();
       return;
     }
 
@@ -230,7 +231,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
       onSave(strokes.current);
     }
     current.current = null;
-    setRevision((r) => r + 1);
+    render();
   };
 
   /** Undo */
@@ -240,7 +241,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
     redoStack.current.push([...strokes.current]);
     strokes.current = prev;
     onSave(strokes.current);
-    setRevision((r) => r + 1);
+    render();
   };
 
   /** Redo */
@@ -250,7 +251,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
     undoStack.current.push([...strokes.current]);
     strokes.current = next;
     onSave(strokes.current);
-    setRevision((r) => r + 1);
+    render();
   };
 
   /** Clear all */
@@ -259,22 +260,31 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
     redoStack.current = [];
     strokes.current = [];
     onSave([]);
-    setRevision((r) => r + 1);
+    render();
   };
 
   /** Zoom */
   const zoom = (dir: 1 | -1) => {
-    setScale((s) => Math.min(4, Math.max(0.5, s + dir * 0.25)));
+    scaleRef.current = Math.min(4, Math.max(0.5, scaleRef.current + dir * 0.25));
+    setScaleUI(scaleRef.current);
+    render();
   };
 
   /** Reset view */
-  const resetView = () => { setScale(1); setOffset({ x: 0, y: 0 }); };
+  const resetView = () => {
+    scaleRef.current = 1;
+    offsetRef.current = { x: 0, y: 0 };
+    setScaleUI(1);
+    render();
+  };
 
   /** Scroll to zoom */
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const dir = e.deltaY < 0 ? 1 : -1;
-    setScale((s) => Math.min(4, Math.max(0.5, s + dir * 0.1)));
+    scaleRef.current = Math.min(4, Math.max(0.5, scaleRef.current + dir * 0.1));
+    setScaleUI(scaleRef.current);
+    render();
   };
 
   /** Tool button helper */
@@ -359,7 +369,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onS
           </svg>
         </ToolBtn>
         <button onClick={resetView} title="초기화" className="text-[10px] font-mono text-ink-muted hover:text-ink cursor-pointer min-w-[36px] text-center">
-          {Math.round(scale * 100)}%
+          {Math.round(scaleUI * 100)}%
         </button>
         <ToolBtn onClick={() => zoom(1)} title="확대">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
