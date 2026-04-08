@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import Navbar from '../components/Navbar';
+import AppLayout from '../components/AppLayout';
 
 /** API base URL */
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
@@ -102,19 +102,17 @@ export default function AssignmentDetail() {
 
   if (!assignment) {
     return (
-      <div className="min-h-screen font-display bg-paper-grain flex flex-col">
-        <Navbar />
+      <AppLayout>
         <div className="flex-1 flex items-center justify-center">
           <p className="text-[14px] text-ink-muted font-mono">로딩 중...</p>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="min-h-screen font-display bg-paper-grain flex flex-col">
-      <Navbar />
-      <div className="flex-1 max-w-4xl mx-auto w-full px-6 py-10">
+    <AppLayout>
+      <div className="flex-1 max-w-4xl w-full px-6 py-10">
         {/* header */}
         <div className="mb-8">
           <button
@@ -231,6 +229,6 @@ export default function AssignmentDetail() {
           )
         )}
       </div>
-    </div>
+    </AppLayout>
   );
 }
