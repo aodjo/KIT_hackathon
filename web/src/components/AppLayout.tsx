@@ -32,10 +32,12 @@ type ClassItem = {
 export default function AppLayout({
   children,
   selectedClassId,
+  initialClassId,
   onSelectClass,
 }: {
   children: ReactNode;
   selectedClassId?: string | null;
+  initialClassId?: string | null;
   onSelectClass?: (cls: ClassItem) => void;
 }) {
   /** Current user */
@@ -121,7 +123,10 @@ export default function AppLayout({
       .then((d) => {
         const list = d.classes ?? [];
         setClasses(list);
-        if (list.length > 0 && onSelectClass) onSelectClass(list[0]);
+        if (list.length > 0 && onSelectClass) {
+          const target = initialClassId ? list.find((c: ClassItem) => c.id === initialClassId) : null;
+          onSelectClass(target ?? list[0]);
+        }
       })
       .catch(() => {});
   }, [user?.id, user?.role]);

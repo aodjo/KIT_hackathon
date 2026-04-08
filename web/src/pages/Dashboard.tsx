@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { IoIosArrowUp } from 'react-icons/io';
 import AppLayout, { type ClassItem } from '../components/AppLayout';
@@ -36,6 +36,7 @@ const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
  */
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { classId: classIdFromUrl } = useParams<{ classId: string }>();
   /** Current user */
   const user = getStoredUser();
   /** Currently selected class */
@@ -181,7 +182,7 @@ export default function Dashboard() {
   if (!user) return null;
 
   return (
-    <AppLayout selectedClassId={selectedClass?.id} onSelectClass={setSelectedClass}>
+    <AppLayout selectedClassId={selectedClass?.id} initialClassId={classIdFromUrl} onSelectClass={(cls) => { setSelectedClass(cls); navigate(`/c/${cls.id}`, { replace: true }); }}>
       <div className="px-6 lg:px-10 py-10">
         {/* header */}
         <div className="mb-10 flex items-end justify-between">

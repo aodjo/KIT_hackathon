@@ -158,6 +158,7 @@ export default function App() {
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<RootPage />} />
+        <Route path="/c/:classId" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/workbook/:id" element={<WorkbookEditor />} />
         <Route path="/assignment/:id" element={<AssignmentDetail />} />

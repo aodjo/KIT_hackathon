@@ -102,7 +102,7 @@ export default function AssignmentDetail() {
 
   if (!assignment) {
     return (
-      <AppLayout>
+      <AppLayout onSelectClass={(cls) => navigate(`/c/${cls.id}`)}>
         <div className="flex-1 flex items-center justify-center">
           <p className="text-[14px] text-ink-muted font-mono">로딩 중...</p>
         </div>
@@ -111,7 +111,7 @@ export default function AssignmentDetail() {
   }
 
   return (
-    <AppLayout>
+    <AppLayout onSelectClass={(cls) => navigate(`/c/${cls.id}`)}>
       <div className="flex-1 max-w-4xl w-full px-6 py-10">
         {/* header */}
         <div className="mb-8">
