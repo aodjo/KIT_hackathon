@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { DndContext, DragOverlay, closestCenter, type DragStartEvent, type DragEndEvent, type DragOverEvent, useDroppable, useDraggable } from '@dnd-kit/core';
+import { DndContext, DragOverlay, closestCenter, type DragStartEvent, type DragEndEvent, useDroppable, useDraggable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { IoIosArrowUp } from 'react-icons/io';
@@ -128,21 +128,18 @@ function SortableCard({ q, index, onRemove }: { q: Question; index: number; onRe
  * @return draggable card element
  */
 function DraggableMarketCard({ q, added, onClick }: { q: Question; added: boolean; onClick: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `market-${q.id}`,
     disabled: added,
   });
 
-  /** Inline transform style */
-  const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, opacity: isDragging ? 0.4 : 1 } : undefined;
-
   return (
     <div
       ref={setNodeRef}
-      style={style}
       {...attributes}
       {...listeners}
       onClick={onClick}
+      style={{ opacity: isDragging ? 0.3 : 1 }}
       className={`border rounded-lg p-3 transition-colors ${
         added
           ? 'border-grain/50 bg-grain/20 opacity-50'
@@ -202,8 +199,6 @@ export default function WorkbookEditor() {
 
   /** Currently dragged item ID (number for workbook, "market-N" for marketplace) */
   const [activeId, setActiveId] = useState<string | number | null>(null);
-  /** Insert index for marketplace → workbook drag */
-  const [insertIndex, setInsertIndex] = useState<number | null>(null);
 
   /** Saving name */
   const [savingName, setSavingName] = useState(false);
@@ -322,42 +317,12 @@ export default function WorkbookEditor() {
    */
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id);
-    setInsertIndex(null);
   };
 
   /** Ref for left marketplace panel */
   const marketplaceRef = useRef<HTMLDivElement>(null);
   /** Droppable zone for workbook panel */
   const { setNodeRef: setWorkbookDropRef } = useDroppable({ id: 'workbook-drop' });
-
-  /**
-   * Track insert position for marketplace → workbook drag.
-   *
-   * @param event drag over event
-   * @return void
-   */
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    const aid = active.id;
-
-    /** Only handle marketplace items */
-    if (typeof aid !== 'string' || !String(aid).startsWith('market-')) return;
-
-    /** Check pointer actually crossed into workbook area */
-    const marketRect = marketplaceRef.current?.getBoundingClientRect();
-    if (!marketRect) return;
-    const currentX = (event.activatorEvent as PointerEvent).clientX + event.delta.x;
-    const isInWorkbook = currentX > marketRect.right;
-
-    if (isInWorkbook && over && typeof over.id === 'number') {
-      const idx = questions.findIndex((q) => q.id === over.id);
-      setInsertIndex(idx >= 0 ? idx : questions.length);
-    } else if (isInWorkbook && over?.id === 'workbook-drop') {
-      setInsertIndex(questions.length);
-    } else {
-      setInsertIndex(null);
-    }
-  };
 
   /**
    * Handle drag end for reordering, removing, or adding.
@@ -367,30 +332,37 @@ export default function WorkbookEditor() {
    */
   const handleDragEnd = async (event: DragEndEvent) => {
     const dragId = activeId;
-    const dropIndex = insertIndex;
     setActiveId(null);
-    setInsertIndex(null);
     if (!dragId) return;
 
     const { active, over } = event;
 
-    /** Marketplace item → workbook */
-    if (typeof dragId === 'string' && String(dragId).startsWith('market-')) {
-      const qId = Number(String(dragId).replace('market-', ''));
-      const q = marketQuestions.find((mq) => mq.id === qId);
-      if (q && dropIndex != null) {
-        addQuestion(q, dropIndex);
-      }
-      return;
-    }
-
-    /** Workbook item dragged to marketplace → remove */
+    /** Compute final pointer position */
     const pointer = event.activatorEvent instanceof PointerEvent && (event as any).delta
       ? {
           x: (event.activatorEvent as PointerEvent).clientX + (event as any).delta.x,
           y: (event.activatorEvent as PointerEvent).clientY + (event as any).delta.y,
         }
       : null;
+
+    /** Marketplace item → workbook */
+    if (typeof dragId === 'string' && String(dragId).startsWith('market-')) {
+      const marketRect = marketplaceRef.current?.getBoundingClientRect();
+      if (!pointer || !marketRect || pointer.x <= marketRect.right) return;
+
+      const qId = Number(String(dragId).replace('market-', ''));
+      const q = marketQuestions.find((mq) => mq.id === qId);
+      if (!q) return;
+      if (over && typeof over.id === 'number') {
+        const idx = questions.findIndex((p) => p.id === over.id);
+        addQuestion(q, idx >= 0 ? idx : undefined);
+      } else {
+        addQuestion(q);
+      }
+      return;
+    }
+
+    /** Workbook item dragged to marketplace → remove */
     if (pointer && marketplaceRef.current) {
       const rect = marketplaceRef.current.getBoundingClientRect();
       if (pointer.x < rect.right) {
@@ -450,7 +422,7 @@ export default function WorkbookEditor() {
   return (
     <div className="min-h-screen font-display bg-paper-grain flex flex-col">
       <Navbar />
-      <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+      <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex-1 flex">
         {/* left: marketplace */}
         <div ref={marketplaceRef} className={`w-[480px] shrink-0 flex border-r transition-colors ${activeId && !isMarketDrag ? 'border-r-red-300 bg-red-50/30' : 'border-grain'}`}>
@@ -578,7 +550,7 @@ export default function WorkbookEditor() {
           </div>
 
           <div ref={setWorkbookDropRef} className="flex-1 overflow-y-auto p-6">
-            {questions.length === 0 && insertIndex == null ? (
+            {questions.length === 0 ? (
               <div className="border border-dashed border-grain rounded-lg p-8 text-center">
                 <p className="text-[14px] text-ink-muted">
                   왼쪽에서 문제를 클릭하거나 드래그하여 추가하세요.
@@ -588,19 +560,8 @@ export default function WorkbookEditor() {
               <SortableContext items={questions.map((q) => q.id)} strategy={rectSortingStrategy}>
                 <div className="grid grid-cols-2 gap-3">
                   {questions.map((q, i) => (
-                    <>{insertIndex === i && (
-                      <div key="placeholder" className="border-2 border-dashed border-ink/20 rounded-lg min-h-[80px] flex items-center justify-center">
-                        <span className="text-[12px] text-ink-muted">여기에 추가</span>
-                      </div>
-                    )}
                     <SortableCard key={q.id} q={q} index={i + 1} onRemove={() => removeQuestion(q.id)} />
-                    </>
                   ))}
-                  {insertIndex != null && insertIndex >= questions.length && (
-                    <div key="placeholder-end" className="border-2 border-dashed border-ink/20 rounded-lg min-h-[80px] flex items-center justify-center">
-                      <span className="text-[12px] text-ink-muted">여기에 추가</span>
-                    </div>
-                  )}
                 </div>
               </SortableContext>
             )}
