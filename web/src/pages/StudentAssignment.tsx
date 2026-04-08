@@ -47,126 +47,345 @@ function Latex({ text, className }: { text: string; className?: string }) {
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+/** Single stroke point */
+type Point = { x: number; y: number };
+
+/** Stroke data */
+type Stroke = { points: Point[]; color: string; width: number };
+
 /**
- * Canvas drawing component for handwritten work.
+ * Vector-based canvas with zoom, pan, undo.
  *
- * @param props.dataUrl saved canvas data URL
- * @param props.onSave callback with data URL when drawing changes
+ * @param props.strokes saved strokes
+ * @param props.onSave callback when strokes change
  * @return canvas element
  */
-function DrawCanvas({ dataUrl, onSave }: { dataUrl?: string; onSave: (url: string) => void }) {
+function DrawCanvas({ strokes: savedStrokes, onSave }: { strokes?: Stroke[]; onSave: (strokes: Stroke[]) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
-  const lastPos = useRef({ x: 0, y: 0 });
-  const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  /** Restore saved drawing */
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (dataUrl) {
-      const img = new Image();
-      img.onload = () => ctx.drawImage(img, 0, 0);
-      img.src = dataUrl;
-    }
-  }, []);
+  /** All committed strokes */
+  const strokes = useRef<Stroke[]>(savedStrokes ?? []);
+  /** Current in-progress stroke */
+  const current = useRef<Stroke | null>(null);
+  /** Undo stack */
+  const undoStack = useRef<Stroke[][]>([]);
+  /** Redo stack */
+  const redoStack = useRef<Stroke[][]>([]);
+
+  /** View transform */
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  /** Active tool */
+  const [tool, setTool] = useState<'pen' | 'eraser' | 'pan'>('pen');
+  /** Pen width */
+  const [penSize, setPenSize] = useState(2);
+  /** Undo/redo count for re-render trigger */
+  const [revision, setRevision] = useState(0);
+
+  /** Drawing state refs */
+  const isDown = useRef(false);
+  const panStart = useRef({ x: 0, y: 0 });
+  const offsetStart = useRef({ x: 0, y: 0 });
 
   /**
-   * Get canvas-relative position from pointer event.
+   * Convert screen coords to world coords.
    *
    * @param e pointer event
-   * @return x, y coordinates
+   * @return world-space point
    */
-  const getPos = (e: React.PointerEvent) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  };
+  const toWorld = useCallback((e: React.PointerEvent): Point => {
+    const rect = containerRef.current!.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left - offset.x) / scale,
+      y: (e.clientY - rect.top - offset.y) / scale,
+    };
+  }, [scale, offset]);
 
-  /** Start drawing */
-  const onDown = (e: React.PointerEvent) => {
-    drawing.current = true;
-    lastPos.current = getPos(e);
-    canvasRef.current?.setPointerCapture(e.pointerId);
-  };
-
-  /** Draw line segment */
-  const onMove = (e: React.PointerEvent) => {
-    if (!drawing.current) return;
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
-    const pos = getPos(e);
-    ctx.beginPath();
-    ctx.moveTo(lastPos.current.x, lastPos.current.y);
-    ctx.lineTo(pos.x, pos.y);
-    if (tool === 'eraser') {
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 20;
-    } else {
-      ctx.strokeStyle = '#1a1a1a';
-      ctx.lineWidth = 2;
-    }
-    ctx.lineCap = 'round';
-    ctx.stroke();
-    lastPos.current = pos;
-  };
-
-  /** End drawing and save */
-  const onUp = () => {
-    drawing.current = false;
-    if (canvasRef.current) onSave(canvasRef.current.toDataURL());
-  };
-
-  /** Clear canvas */
-  const handleClear = () => {
+  /**
+   * Render all strokes to canvas.
+   *
+   * @return void
+   */
+  const render = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = container.offsetWidth;
+    const h = container.offsetHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
+
+    /** Clear */
     ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    onSave('');
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.translate(offset.x, offset.y);
+    ctx.scale(scale, scale);
+
+    /** Draw grid when zoomed */
+    if (scale > 1.2) {
+      const gridSize = 20;
+      ctx.strokeStyle = '#f0ede8';
+      ctx.lineWidth = 0.5 / scale;
+      const startX = Math.floor(-offset.x / scale / gridSize) * gridSize;
+      const startY = Math.floor(-offset.y / scale / gridSize) * gridSize;
+      const endX = startX + w / scale + gridSize;
+      const endY = startY + h / scale + gridSize;
+      for (let x = startX; x < endX; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, startY);
+        ctx.lineTo(x, endY);
+        ctx.stroke();
+      }
+      for (let y = startY; y < endY; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.lineTo(endX, y);
+        ctx.stroke();
+      }
+    }
+
+    /** Draw strokes */
+    const all = [...strokes.current];
+    if (current.current) all.push(current.current);
+    for (const s of all) {
+      if (s.points.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(s.points[0].x, s.points[0].y);
+      for (let i = 1; i < s.points.length; i++) {
+        const p0 = s.points[i - 1];
+        const p1 = s.points[i];
+        ctx.quadraticCurveTo(p0.x, p0.y, (p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
+      }
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = s.width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }, [scale, offset, revision]);
+
+  /** Re-render on state change */
+  useEffect(() => { render(); }, [render]);
+
+  /** Resize observer */
+  useEffect(() => {
+    const obs = new ResizeObserver(() => render());
+    if (containerRef.current) obs.observe(containerRef.current);
+    return () => obs.disconnect();
+  }, [render]);
+
+  /** Pointer down */
+  const onDown = (e: React.PointerEvent) => {
+    isDown.current = true;
+    containerRef.current?.setPointerCapture(e.pointerId);
+
+    if (tool === 'pan') {
+      panStart.current = { x: e.clientX, y: e.clientY };
+      offsetStart.current = { ...offset };
+      return;
+    }
+
+    undoStack.current.push([...strokes.current]);
+    redoStack.current = [];
+    current.current = {
+      points: [toWorld(e)],
+      color: tool === 'eraser' ? '#ffffff' : '#1a1a1a',
+      width: tool === 'eraser' ? penSize * 5 : penSize,
+    };
   };
+
+  /** Pointer move */
+  const onMove = (e: React.PointerEvent) => {
+    if (!isDown.current) return;
+
+    if (tool === 'pan') {
+      setOffset({
+        x: offsetStart.current.x + (e.clientX - panStart.current.x),
+        y: offsetStart.current.y + (e.clientY - panStart.current.y),
+      });
+      return;
+    }
+
+    if (current.current) {
+      current.current.points.push(toWorld(e));
+      render();
+    }
+  };
+
+  /** Pointer up */
+  const onUp = () => {
+    isDown.current = false;
+    if (current.current && current.current.points.length >= 2) {
+      strokes.current.push(current.current);
+      onSave(strokes.current);
+    }
+    current.current = null;
+    setRevision((r) => r + 1);
+  };
+
+  /** Undo */
+  const undo = () => {
+    const prev = undoStack.current.pop();
+    if (!prev) return;
+    redoStack.current.push([...strokes.current]);
+    strokes.current = prev;
+    onSave(strokes.current);
+    setRevision((r) => r + 1);
+  };
+
+  /** Redo */
+  const redo = () => {
+    const next = redoStack.current.pop();
+    if (!next) return;
+    undoStack.current.push([...strokes.current]);
+    strokes.current = next;
+    onSave(strokes.current);
+    setRevision((r) => r + 1);
+  };
+
+  /** Clear all */
+  const clear = () => {
+    undoStack.current.push([...strokes.current]);
+    redoStack.current = [];
+    strokes.current = [];
+    onSave([]);
+    setRevision((r) => r + 1);
+  };
+
+  /** Zoom */
+  const zoom = (dir: 1 | -1) => {
+    setScale((s) => Math.min(4, Math.max(0.5, s + dir * 0.25)));
+  };
+
+  /** Reset view */
+  const resetView = () => { setScale(1); setOffset({ x: 0, y: 0 }); };
+
+  /** Scroll to zoom */
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const dir = e.deltaY < 0 ? 1 : -1;
+    setScale((s) => Math.min(4, Math.max(0.5, s + dir * 0.1)));
+  };
+
+  /** Tool button helper */
+  const ToolBtn = ({ active, onClick, children, title }: { active?: boolean; onClick: () => void; children: React.ReactNode; title: string }) => (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
+        active ? 'bg-ink text-paper' : 'text-ink-muted hover:text-ink hover:bg-grain/50'
+      }`}
+    >
+      {children}
+    </button>
+  );
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-2">
-        <button
-          onClick={() => setTool('pen')}
-          className={`text-[11px] font-mono px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
-            tool === 'pen' ? 'bg-ink text-paper border-ink' : 'border-grain text-ink-muted hover:text-ink'
-          }`}
-        >
-          펜
+      {/* toolbar */}
+      <div className="flex items-center gap-1 mb-2 px-1">
+        {/* drawing tools */}
+        <ToolBtn active={tool === 'pen'} onClick={() => setTool('pen')} title="펜">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+          </svg>
+        </ToolBtn>
+        <ToolBtn active={tool === 'eraser'} onClick={() => setTool('eraser')} title="지우개">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" /><path d="M22 21H7" /><path d="m5 11 9 9" />
+          </svg>
+        </ToolBtn>
+        <ToolBtn active={tool === 'pan'} onClick={() => setTool('pan')} title="이동">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 9l-3 3 3 3" /><path d="M9 5l3-3 3 3" /><path d="M15 19l-3 3-3-3" /><path d="M19 9l3 3-3 3" /><path d="M2 12h20" /><path d="M12 2v20" />
+          </svg>
+        </ToolBtn>
+
+        {/* separator */}
+        <div className="w-px h-5 bg-grain mx-1" />
+
+        {/* pen size */}
+        <div className="flex items-center gap-1.5 mx-1">
+          {[1, 2, 4, 6].map((s) => (
+            <button
+              key={s}
+              onClick={() => setPenSize(s)}
+              title={`${s}px`}
+              className={`rounded-full transition-colors cursor-pointer ${
+                penSize === s ? 'bg-ink' : 'bg-ink/30 hover:bg-ink/60'
+              }`}
+              style={{ width: Math.max(6, s * 2 + 4), height: Math.max(6, s * 2 + 4) }}
+            />
+          ))}
+        </div>
+
+        {/* separator */}
+        <div className="w-px h-5 bg-grain mx-1" />
+
+        {/* undo/redo */}
+        <ToolBtn onClick={undo} title="실행 취소">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+          </svg>
+        </ToolBtn>
+        <ToolBtn onClick={redo} title="다시 실행">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+          </svg>
+        </ToolBtn>
+        <ToolBtn onClick={clear} title="전체 지우기">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          </svg>
+        </ToolBtn>
+
+        {/* separator */}
+        <div className="w-px h-5 bg-grain mx-1" />
+
+        {/* zoom */}
+        <ToolBtn onClick={() => zoom(-1)} title="축소">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /><path d="M8 11h6" />
+          </svg>
+        </ToolBtn>
+        <button onClick={resetView} title="초기화" className="text-[10px] font-mono text-ink-muted hover:text-ink cursor-pointer min-w-[36px] text-center">
+          {Math.round(scale * 100)}%
         </button>
-        <button
-          onClick={() => setTool('eraser')}
-          className={`text-[11px] font-mono px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
-            tool === 'eraser' ? 'bg-ink text-paper border-ink' : 'border-grain text-ink-muted hover:text-ink'
-          }`}
-        >
-          지우개
-        </button>
-        <button
-          onClick={handleClear}
-          className="text-[11px] font-mono px-2.5 py-1 rounded-full border border-grain text-ink-muted hover:text-ink transition-colors cursor-pointer ml-auto"
-        >
-          전체 지우기
-        </button>
+        <ToolBtn onClick={() => zoom(1)} title="확대">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /><path d="M11 8v6" /><path d="M8 11h6" />
+          </svg>
+        </ToolBtn>
       </div>
-      <canvas
-        ref={canvasRef}
-        onPointerDown={onDown}
-        onPointerMove={onMove}
-        onPointerUp={onUp}
-        onPointerLeave={onUp}
-        className="w-full h-48 border border-grain rounded-lg bg-white cursor-crosshair touch-none"
-      />
+
+      {/* canvas */}
+      <div
+        ref={containerRef}
+        onWheel={onWheel}
+        className="relative overflow-hidden border border-grain rounded-lg bg-white"
+        style={{ height: 240 }}
+      >
+        <canvas
+          ref={canvasRef}
+          onPointerDown={onDown}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerLeave={onUp}
+          className={`absolute inset-0 touch-none ${
+            tool === 'pan' ? 'cursor-grab active:cursor-grabbing' : tool === 'eraser' ? 'cursor-cell' : 'cursor-crosshair'
+          }`}
+        />
+      </div>
     </div>
   );
 }
@@ -191,8 +410,8 @@ export default function StudentAssignment() {
   const [workMode, setWorkMode] = useState<'draw' | 'type'>('draw');
   /** Typed work keyed by question ID */
   const [workText, setWorkText] = useState<Record<number, string>>({});
-  /** Canvas data URLs keyed by question ID */
-  const [workDraw, setWorkDraw] = useState<Record<number, string>>({});
+  /** Canvas strokes keyed by question ID */
+  const [workDraw, setWorkDraw] = useState<Record<number, Stroke[]>>({});
   /** Current question index */
   const [currentIdx, setCurrentIdx] = useState(0);
   /** Submission result */
@@ -429,8 +648,8 @@ export default function StudentAssignment() {
                 {workMode === 'draw' ? (
                   <DrawCanvas
                     key={q.id}
-                    dataUrl={workDraw[q.id]}
-                    onSave={(url) => setWorkDraw((prev) => ({ ...prev, [q.id]: url }))}
+                    strokes={workDraw[q.id]}
+                    onSave={(s) => setWorkDraw((prev) => ({ ...prev, [q.id]: s }))}
                   />
                 ) : (
                   <textarea
