@@ -39,6 +39,130 @@ assignments.post('/', async (c) => {
 });
 
 /**
+ * POST /api/assignments/from-workbook
+ * Create assignment from a workbook.
+ * Body: { classId, teacherId, workbookId, title?, dueDate? }
+ */
+assignments.post('/from-workbook', async (c) => {
+  const body = await c.req.json<{
+    classId: string;
+    teacherId: number;
+    workbookId: string;
+    title?: string;
+    dueDate?: string;
+  }>();
+
+  /** Fetch workbook name as fallback title */
+  const wb = await c.env.DB.prepare('SELECT name FROM workbooks WHERE id = ?')
+    .bind(body.workbookId)
+    .first<{ name: string }>();
+
+  if (!wb) return c.json({ error: 'Workbook not found' }, 404);
+
+  const title = body.title?.trim() || wb.name;
+
+  const result = await c.env.DB.prepare(
+    `INSERT INTO assignments (class_id, teacher_id, title, problem, answer, workbook_id, due_date)
+     VALUES (?, ?, ?, '', '', ?, ?)`,
+  )
+    .bind(body.classId, body.teacherId, title, body.workbookId, body.dueDate ?? null)
+    .run();
+
+  return c.json({ id: result.meta.last_row_id, title });
+});
+
+/**
+ * GET /api/assignments/:id/questions
+ * Get questions for a workbook-based assignment.
+ */
+assignments.get('/:id/questions', async (c) => {
+  const id = c.req.param('id');
+
+  const assignment = await c.env.DB.prepare(
+    'SELECT workbook_id FROM assignments WHERE id = ?',
+  )
+    .bind(id)
+    .first<{ workbook_id: string | null }>();
+
+  if (!assignment?.workbook_id) return c.json({ questions: [] });
+
+  const questions = await c.env.DB.prepare(
+    `SELECT q.*, wq.position
+     FROM workbook_questions wq
+     JOIN questions q ON wq.question_id = q.id
+     WHERE wq.workbook_id = ?
+     ORDER BY wq.position`,
+  )
+    .bind(assignment.workbook_id)
+    .all();
+
+  return c.json({ questions: questions.results });
+});
+
+/**
+ * POST /api/assignments/:id/submit-answers
+ * Student submits answers for a workbook-based assignment.
+ * Body: { studentId, answers: { questionId: number, answer: string }[] }
+ */
+assignments.post('/:id/submit-answers', async (c) => {
+  const id = c.req.param('id');
+  const { studentId, answers } = await c.req.json<{
+    studentId: number;
+    answers: { questionId: number; answer: string }[];
+  }>();
+
+  /** Fetch correct answers for all questions */
+  const assignment = await c.env.DB.prepare(
+    'SELECT workbook_id FROM assignments WHERE id = ?',
+  )
+    .bind(id)
+    .first<{ workbook_id: string | null }>();
+
+  if (!assignment?.workbook_id) return c.json({ error: 'Not a workbook assignment' }, 400);
+
+  const qRows = await c.env.DB.prepare(
+    `SELECT q.id, q.answer FROM workbook_questions wq
+     JOIN questions q ON wq.question_id = q.id
+     WHERE wq.workbook_id = ?`,
+  )
+    .bind(assignment.workbook_id)
+    .all<{ id: number; answer: string }>();
+
+  const answerMap = new Map(qRows.results.map((r) => [r.id, r.answer]));
+
+  /** Upsert each answer */
+  const stmts = answers.map((a) => {
+    const correctAnswer = answerMap.get(a.questionId) ?? '';
+    const correct = a.answer.trim() === correctAnswer.trim() ? 1 : 0;
+    return c.env.DB.prepare(
+      `INSERT INTO assignment_answers (assignment_id, student_id, question_id, answer, correct)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(assignment_id, student_id, question_id) DO UPDATE SET
+         answer = excluded.answer, correct = excluded.correct, submitted_at = datetime('now')`,
+    ).bind(id, studentId, a.questionId, a.answer, correct);
+  });
+
+  await c.env.DB.batch(stmts);
+
+  /** Also upsert into submissions for aggregate tracking */
+  const totalCorrect = answers.filter((a) => {
+    const ca = answerMap.get(a.questionId) ?? '';
+    return a.answer.trim() === ca.trim();
+  }).length;
+
+  await c.env.DB.prepare(
+    `INSERT INTO submissions (assignment_id, student_id, answer, correct)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(assignment_id, student_id) DO UPDATE SET
+       answer = excluded.answer, correct = excluded.correct, submitted_at = datetime('now')`,
+  )
+    .bind(id, studentId, `${totalCorrect}/${answers.length}`, totalCorrect === answers.length ? 1 : 0)
+    .run();
+
+  return c.json({ correct: totalCorrect, total: answers.length });
+});
+
+/**
  * GET /api/assignments/class/:classId
  * List assignments for a class.
  */

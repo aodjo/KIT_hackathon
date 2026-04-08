@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { IoSettingsOutline } from 'react-icons/io5';
+import { IoIosArrowUp } from 'react-icons/io';
 import AppLayout, { type ClassItem } from '../components/AppLayout';
 import { getStoredUser } from '../lib/auth';
 
@@ -10,10 +12,18 @@ type Assignment = {
   title: string;
   problem: string;
   answer: string;
+  workbook_id: string | null;
   due_date: string | null;
   submission_count: number;
   total_students: number;
   created_at: string;
+};
+
+/** Workbook summary for selection */
+type WorkbookItem = {
+  id: string;
+  name: string;
+  question_count: number;
 };
 
 /** API base URL */
@@ -25,6 +35,7 @@ const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
  * @return dashboard page element
  */
 export default function Dashboard() {
+  const navigate = useNavigate();
   /** Current user */
   const user = getStoredUser();
   /** Currently selected class */
@@ -35,10 +46,14 @@ export default function Dashboard() {
   const [showCreateAssignment, setShowCreateAssignment] = useState(false);
   /** New assignment title */
   const [newTitle, setNewTitle] = useState('');
-  /** New assignment problem */
-  const [newProblem, setNewProblem] = useState('');
-  /** New assignment answer */
-  const [newAnswer, setNewAnswer] = useState('');
+  /** Teacher's workbooks */
+  const [workbooks, setWorkbooks] = useState<WorkbookItem[]>([]);
+  /** Selected workbook ID */
+  const [selectedWorkbookId, setSelectedWorkbookId] = useState<string | null>(null);
+  /** Workbook dropdown open */
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  /** Dropdown ref for outside click */
+  const dropdownRef = useRef<HTMLDivElement>(null);
   /** Show manage class modal */
   const [showManage, setShowManage] = useState(false);
   /** Active manage tab */
@@ -61,32 +76,49 @@ export default function Dashboard() {
       .catch(() => {});
   }, [selectedClass]);
 
+  /** Close dropdown on outside click */
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [dropdownOpen]);
+
+  /** Fetch teacher's workbooks when modal opens */
+  useEffect(() => {
+    if (!showCreateAssignment || !user) return;
+    fetch(`${API}/api/workbooks/teacher/${user.id}`)
+      .then((r) => r.json())
+      .then((d) => setWorkbooks(d.workbooks ?? []))
+      .catch(() => {});
+  }, [showCreateAssignment]);
+
   /**
-   * Create a new assignment.
+   * Create assignment from selected workbook.
    *
    * @return void
    */
-  const handleCreateAssignment = async () => {
-    if (!newTitle.trim() || !newProblem.trim() || !newAnswer.trim() || !selectedClass || !user) return;
-    const res = await fetch(`${API}/api/assignments`, {
+  const handleCreateFromWorkbook = async () => {
+    if (!selectedWorkbookId || !selectedClass || !user) return;
+    const res = await fetch(`${API}/api/assignments/from-workbook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         classId: selectedClass.id,
         teacherId: user.id,
-        title: newTitle.trim(),
-        problem: newProblem.trim(),
-        answer: newAnswer.trim(),
+        workbookId: selectedWorkbookId,
+        title: newTitle.trim() || undefined,
       }),
     });
     const data = await res.json();
     setAssignments((prev) => [
-      { ...data, class_id: selectedClass.id, title: newTitle.trim(), problem: newProblem.trim(), answer: newAnswer.trim(), due_date: null, submission_count: 0, total_students: selectedClass.member_count ?? 0, created_at: new Date().toISOString() },
+      { id: data.id, class_id: selectedClass.id, title: data.title, problem: '', answer: '', workbook_id: selectedWorkbookId, due_date: null, submission_count: 0, total_students: selectedClass.member_count ?? 0, created_at: new Date().toISOString() },
       ...prev,
     ]);
     setNewTitle('');
-    setNewProblem('');
-    setNewAnswer('');
+    setSelectedWorkbookId(null);
     setShowCreateAssignment(false);
   };
 
@@ -205,12 +237,18 @@ export default function Dashboard() {
                 {assignments.map((a) => (
                   <div
                     key={a.id}
-                    className="border border-grain rounded-lg p-5 hover:border-ink/30 transition-colors"
+                    onClick={() => navigate(`/assignment/${a.id}`)}
+                    className="border border-grain rounded-lg p-5 hover:border-ink/30 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start justify-between">
                       <div>
-                        <h3 className="text-[17px] font-medium text-ink">{a.title}</h3>
-                        <p className="mt-1 text-[14px] text-ink-muted">{a.problem}</p>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-[17px] font-medium text-ink">{a.title}</h3>
+                          {a.workbook_id && (
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-grain text-ink-muted">문제집</span>
+                          )}
+                        </div>
+                        {a.problem && <p className="mt-1 text-[14px] text-ink-muted">{a.problem}</p>}
                       </div>
                       <div className="text-right shrink-0 ml-4">
                         <div className="text-[13px] font-mono text-ink">
@@ -237,55 +275,69 @@ export default function Dashboard() {
             <div className="space-y-4">
               <div>
                 <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
-                  제목
+                  문제집 목록
+                </label>
+                {workbooks.length === 0 ? (
+                  <p className="text-[13px] text-ink-muted py-4 text-center">문제집이 없습니다. 사이드바에서 문제집을 먼저 만들어주세요.</p>
+                ) : (
+                  <div ref={dropdownRef} className="relative">
+                    <button
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-left focus:outline-none focus:border-ink transition-colors bg-paper cursor-pointer flex items-center justify-between"
+                    >
+                      <span className={selectedWorkbookId ? 'text-ink' : 'text-ink-muted'}>
+                        {selectedWorkbookId
+                          ? workbooks.find((wb) => wb.id === selectedWorkbookId)?.name ?? '선택'
+                          : '문제집을 선택하세요'}
+                      </span>
+                      <IoIosArrowUp className={`text-[14px] text-ink-muted transition-transform ${dropdownOpen ? '' : 'rotate-180'}`} />
+                    </button>
+                    {dropdownOpen && (
+                      <div className="absolute z-10 w-full mt-1 bg-paper border border-grain rounded-lg shadow-paper-lg max-h-48 overflow-y-auto">
+                        {workbooks.map((wb) => (
+                          <button
+                            key={wb.id}
+                            onClick={() => { setSelectedWorkbookId(wb.id); setDropdownOpen(false); }}
+                            className={`w-full text-left px-4 py-2.5 text-[14px] transition-colors cursor-pointer flex items-center justify-between ${
+                              selectedWorkbookId === wb.id ? 'bg-ink/5 text-ink font-medium' : 'text-ink hover:bg-grain/30'
+                            }`}
+                          >
+                            <span>{wb.name}</span>
+                            <span className="text-[11px] text-ink-muted font-mono">{wb.question_count}문제</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
+                  제목 (선택)
                 </label>
                 <input
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="예: 일차함수 기울기 구하기"
-                  className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
-                  문제
-                </label>
-                <textarea
-                  value={newProblem}
-                  onChange={(e) => setNewProblem(e.target.value)}
-                  placeholder="문제 내용을 입력하세요"
-                  rows={3}
-                  className="w-full border border-grain rounded-lg px-4 py-3 font-mono text-[15px] text-ink resize-none focus:outline-none focus:border-ink transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono mb-2">
-                  정답
-                </label>
-                <input
-                  type="text"
-                  value={newAnswer}
-                  onChange={(e) => setNewAnswer(e.target.value)}
-                  placeholder="정답을 입력하세요"
+                  placeholder="비워두면 문제집 이름 사용"
                   className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[15px] text-ink focus:outline-none focus:border-ink transition-colors"
                 />
               </div>
-            </div>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={() => setShowCreateAssignment(false)}
-                className="h-10 px-5 rounded-full text-[13px] font-medium text-ink hover:bg-grain/50 transition-colors cursor-pointer"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleCreateAssignment}
-                className="h-10 px-5 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors cursor-pointer"
-              >
-                출제하기
-              </button>
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  onClick={() => setShowCreateAssignment(false)}
+                  className="h-10 px-5 rounded-full text-[13px] font-medium text-ink hover:bg-grain/50 transition-colors cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleCreateFromWorkbook}
+                  disabled={!selectedWorkbookId}
+                  className="h-10 px-5 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  출제하기
+                </button>
+              </div>
             </div>
           </div>
         </div>
