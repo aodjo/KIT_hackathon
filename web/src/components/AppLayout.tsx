@@ -278,8 +278,9 @@ export default function AppLayout({
                   type="text"
                   value={joinCode}
                   onChange={(e) => {
-                    if (/^[a-z0-9]*$/.test(e.target.value) && e.target.value.length <= 8) {
-                      setJoinCode(e.target.value);
+                    const val = e.target.value.toUpperCase();
+                    if (/^[A-Z0-9]*$/.test(val) && val.length <= 8) {
+                      setJoinCode(val);
                     }
                   }}
                   onKeyDown={(e) => {
