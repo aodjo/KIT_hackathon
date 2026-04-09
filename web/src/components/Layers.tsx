@@ -81,11 +81,11 @@ function MirrorVisual() {
     <svg viewBox="0 0 320 120" className="w-full h-auto" aria-hidden="true">
       <g stroke="#0A0A0A" strokeWidth="1" fill="none" opacity="0.9">
         <circle cx="100" cy="60" r="26" />
-        <text x="100" y="64" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="13" fontWeight="500" fill="#0A0A0A">학생</text>
+        <text x="100" y="64" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="13" fontWeight="700" fill="#0A0A0A" stroke="none">학생</text>
         <path d="M 130 54 L 186 54" strokeWidth="1.2" markerEnd="url(#arrow)" />
         <path d="M 186 66 L 130 66" strokeWidth="1.2" markerEnd="url(#arrow)" />
         <circle cx="216" cy="60" r="26" strokeDasharray="2 3" />
-        <text x="216" y="64" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="10" fontWeight="500" fill="#6B5435">과거 자아</text>
+        <text x="216" y="64" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="10" fontWeight="700" fill="#6B5435" stroke="none">과거 자아</text>
       </g>
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
@@ -103,7 +103,7 @@ const chapters: Chapter[] = [
   {
     num: '01',
     en: 'Whisper',
-    ko: '숨은 질문 탐지기',
+    ko: '내면의 질문 찾기',
     tag: '감지',
     body: '학생이 질문하지 못하는 순간을 포착합니다. 스크롤 패턴, 체류 시간, 지웠다 다시 쓴 흔적, 오답의 결 — 이 미세 신호를 AI가 "학생이 지금 하고 싶었던 질문"으로 추론해 교사에게 전달합니다.',
     visual: <WhisperVisual />,
@@ -111,9 +111,9 @@ const chapters: Chapter[] = [
   {
     num: '02',
     en: 'Misconception Tracer',
-    ko: '오개념 원인 분석기',
+    ko: '부족한 개념 분석',
     tag: '진단',
-    body: '오답의 원인을 수년 전 선수개념까지 역추적합니다. 지금 고2에서 틀린 미적분 문제가, 사실은 중3의 함수 개념에서 비롯된 것임을 개념 지도 위에서 드러냅니다.',
+    body: '오답의 원인을 수년 전에 배웠던 개념까지 역추적합니다. 지금 고2에서 틀린 미적분 문제가, 사실은 중3의 함수 개념에서 비롯된 것임을 개념 지도 위에서 드러냅니다.',
     visual: <TracerVisual />,
   },
   {
