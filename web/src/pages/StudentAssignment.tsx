@@ -979,13 +979,15 @@ export default function StudentAssignment() {
                     className={`w-7 h-7 rounded-full text-[11px] font-mono font-medium transition-colors cursor-pointer ${
                       i === currentIdx
                         ? 'bg-ink text-paper'
-                        : r === true
-                          ? 'bg-emerald-500 text-paper'
-                          : r === false
-                            ? 'bg-red-400 text-paper'
-                            : answers[qq.id]?.trim()
-                              ? 'bg-ink/20 text-ink'
-                              : 'bg-grain/50 text-ink-muted'
+                        : r === true && (attempts[qq.id] ?? 0) > 0
+                          ? 'bg-amber-400 text-paper'
+                          : r === true
+                            ? 'bg-emerald-500 text-paper'
+                            : r === false
+                              ? 'bg-red-400 text-paper'
+                              : answers[qq.id]?.trim()
+                                ? 'bg-ink/20 text-ink'
+                                : 'bg-grain/50 text-ink-muted'
                     }`}
                   >
                     {i + 1}
