@@ -618,6 +618,21 @@ export default function StudentAssignment() {
   /** Submitting state */
   const [submitting, setSubmitting] = useState(false);
 
+  /** Behavior signals per question */
+  const signals = useRef<Record<number, {
+    dwellStart: number;
+    totalDwell: number;
+    deleteCount: number;
+    pauseCount: number;
+    revisitCount: number;
+    lastInputTime: number;
+    answerChanges: number;
+  }>>({});
+  /** Pause detection timer */
+  const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Detected struggle indicators */
+  const [struggles, setStruggles] = useState<Record<number, string[]>>({});
+
   /** Fetch assignment info */
   useEffect(() => {
     if (!id) return;
@@ -638,6 +653,67 @@ export default function StudentAssignment() {
   const q = questions[currentIdx];
 
   /**
+   * Get or init signal data for a question.
+   *
+   * @param qId question ID
+   * @return signal data
+   */
+  const getSignal = (qId: number) => {
+    if (!signals.current[qId]) {
+      signals.current[qId] = {
+        dwellStart: Date.now(),
+        totalDwell: 0,
+        deleteCount: 0,
+        pauseCount: 0,
+        revisitCount: 0,
+        lastInputTime: Date.now(),
+        answerChanges: 0,
+      };
+    }
+    return signals.current[qId];
+  };
+
+  /** Track dwell time when question changes */
+  useEffect(() => {
+    if (!q) return;
+    const sig = getSignal(q.id);
+    sig.dwellStart = Date.now();
+    return () => { sig.totalDwell += Date.now() - sig.dwellStart; };
+  }, [currentIdx, q?.id]);
+
+  /** Detect long pause (10s no input) */
+  useEffect(() => {
+    if (!q || phase !== 'answering') return;
+    if (pauseTimer.current) clearTimeout(pauseTimer.current);
+    pauseTimer.current = setTimeout(() => {
+      const sig = getSignal(q.id);
+      sig.pauseCount++;
+      detectStruggle(q.id);
+    }, 10000);
+    return () => { if (pauseTimer.current) clearTimeout(pauseTimer.current); };
+  }, [answers[q?.id ?? 0], workText[q?.id ?? 0], currentIdx, phase]);
+
+  /**
+   * Detect struggle patterns and update indicators.
+   *
+   * @param qId question ID
+   * @return void
+   */
+  const detectStruggle = (qId: number) => {
+    const sig = signals.current[qId];
+    if (!sig) return;
+    const indicators: string[] = [];
+    const dwell = sig.totalDwell + (Date.now() - sig.dwellStart);
+    if (dwell > 60000) indicators.push('오래 고민 중');
+    if (sig.deleteCount >= 3) indicators.push('답 수정 반복');
+    if (sig.pauseCount >= 2) indicators.push('장시간 멈춤');
+    if (sig.revisitCount >= 2) indicators.push('문제 재방문');
+    if (indicators.length > 0) {
+      setStruggles((prev) => ({ ...prev, [qId]: indicators }));
+    }
+  };
+
+  /**
    * Update answer for current question.
    *
    * @param value answer text
@@ -645,7 +721,13 @@ export default function StudentAssignment() {
    */
   const setAnswer = (value: string) => {
     if (!q) return;
-    setAnswers((prev) => ({ ...prev, [q.id]: value }));
+    const sig = getSignal(q.id);
+    const prev = answers[q.id] ?? '';
+    if (value.length < prev.length) sig.deleteCount++;
+    if (prev && value !== prev) sig.answerChanges++;
+    sig.lastInputTime = Date.now();
+    setAnswers((p) => ({ ...p, [q.id]: value }));
+    detectStruggle(q.id);
   };
 
   /**
@@ -664,10 +746,23 @@ export default function StudentAssignment() {
     const isCorrect = myAnswer === correctAnswer.trim();
     setResults((prev) => ({ ...prev, [q.id]: isCorrect }));
 
-    /** Initial AI message */
-    const aiMsg = isCorrect
-      ? '정답이에요! 어떻게 풀었는지 설명해줄 수 있나요?'
-      : '아쉽네요. 어디서 헷갈렸는지 같이 생각해볼까요?';
+    /** Finalize dwell time */
+    const sig = getSignal(q.id);
+    sig.totalDwell += Date.now() - sig.dwellStart;
+    detectStruggle(q.id);
+
+    /** Build AI message based on behavior signals */
+    const strug = struggles[q.id] ?? [];
+    let aiMsg: string;
+    if (isCorrect) {
+      aiMsg = strug.length > 0
+        ? `정답이에요! 그런데 풀면서 좀 고민했던 것 같은데, 어떤 부분이 어려웠나요?`
+        : '정답이에요! 어떻게 풀었는지 설명해줄 수 있나요?';
+    } else {
+      aiMsg = strug.length > 0
+        ? `아쉽네요. ${strug.includes('답 수정 반복') ? '답을 여러 번 바꿨는데, ' : ''}${strug.includes('오래 고민 중') ? '오래 고민했던 것 같아요. ' : ''}어디서 막혔는지 이야기해볼까요?`
+        : '아쉽네요. 어디서 헷갈렸는지 같이 생각해볼까요?';
+    }
     setChatMessages((prev) => ({ ...prev, [q.id]: [{ role: 'ai', content: aiMsg }] }));
     setChatInput('');
     setPhase('review');
@@ -693,8 +788,12 @@ export default function StudentAssignment() {
    */
   const goPrev = () => {
     if (currentIdx > 0) {
+      const prevQ = questions[currentIdx - 1];
+      const sig = getSignal(prevQ.id);
+      sig.revisitCount++;
+      detectStruggle(prevQ.id);
       setCurrentIdx(currentIdx - 1);
-      setPhase(results[questions[currentIdx - 1].id] !== undefined ? 'review' : 'answering');
+      setPhase(results[prevQ.id] !== undefined ? 'review' : 'answering');
     }
   };
 
@@ -760,6 +859,25 @@ export default function StudentAssignment() {
       });
       const data = await res.json();
       setFinalResult(data);
+
+      /** Send behavior signals to server */
+      const signalData = questions.map((q) => {
+        const s = signals.current[q.id];
+        return s ? {
+          questionId: q.id,
+          dwellMs: s.totalDwell,
+          deleteCount: s.deleteCount,
+          pauseCount: s.pauseCount,
+          revisitCount: s.revisitCount,
+          answerChanges: s.answerChanges,
+          struggles: struggles[q.id] ?? [],
+        } : null;
+      }).filter(Boolean);
+      fetch(`${API}/api/assignments/${id}/signals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: user.id, signals: signalData }),
+      }).catch(() => {});
     } finally {
       setSubmitting(false);
     }
@@ -803,7 +921,15 @@ export default function StudentAssignment() {
                 return (
                   <button
                     key={i}
-                    onClick={() => { setCurrentIdx(i); setPhase(r !== undefined ? 'review' : 'answering'); }}
+                    onClick={() => {
+                      if (i !== currentIdx) {
+                        const sig = getSignal(qq.id);
+                        sig.revisitCount++;
+                        detectStruggle(qq.id);
+                      }
+                      setCurrentIdx(i);
+                      setPhase(r !== undefined ? 'review' : 'answering');
+                    }}
                     className={`w-7 h-7 rounded-full text-[11px] font-mono font-medium transition-colors cursor-pointer ${
                       i === currentIdx
                         ? 'bg-ink text-paper'
@@ -860,6 +986,18 @@ export default function StudentAssignment() {
                 </span>
                 <span className="text-[10px] font-mono text-ink-muted">{q.school_level} &gt; {q.grade} &gt; {q.curriculum_topic}</span>
               </div>
+
+              {/* struggle indicator */}
+              {struggles[q.id]?.length > 0 && phase === 'answering' && (
+                <div className="flex items-center gap-1.5 mb-4 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><path d="M12 16h.01" />
+                  </svg>
+                  <span className="text-[12px] text-amber-700 font-mono">
+                    {struggles[q.id].join(' · ')}
+                  </span>
+                </div>
+              )}
 
               {/* question text */}
               <Latex text={q.question} className="text-[18px] text-ink leading-relaxed block mb-6" />

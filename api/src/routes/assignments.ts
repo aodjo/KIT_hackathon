@@ -163,6 +163,51 @@ assignments.post('/:id/submit-answers', async (c) => {
 });
 
 /**
+ * POST /api/assignments/:id/signals
+ * Store behavior signals for a student's assignment attempt.
+ * Body: { studentId, signals: { questionId, dwellMs, deleteCount, pauseCount, revisitCount, answerChanges, struggles }[] }
+ */
+assignments.post('/:id/signals', async (c) => {
+  const assignmentId = c.req.param('id');
+  const { studentId, signals } = await c.req.json<{
+    studentId: number;
+    signals: {
+      questionId: number;
+      dwellMs: number;
+      deleteCount: number;
+      pauseCount: number;
+      revisitCount: number;
+      answerChanges: number;
+      struggles: string[];
+    }[];
+  }>();
+
+  const stmts = signals.map((s) =>
+    c.env.DB.prepare(
+      `INSERT INTO behavior_signals (student_id, signal_type, context, concept_id)
+       VALUES (?, 'assignment_behavior', ?, ?)`,
+    ).bind(
+      studentId,
+      JSON.stringify({
+        assignment_id: assignmentId,
+        question_id: s.questionId,
+        dwell_ms: s.dwellMs,
+        delete_count: s.deleteCount,
+        pause_count: s.pauseCount,
+        revisit_count: s.revisitCount,
+        answer_changes: s.answerChanges,
+        struggles: s.struggles,
+      }),
+      null,
+    ),
+  );
+
+  if (stmts.length > 0) await c.env.DB.batch(stmts);
+
+  return c.json({ ok: true });
+});
+
+/**
  * GET /api/assignments/class/:classId
  * List assignments for a class.
  */
