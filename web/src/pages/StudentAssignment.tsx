@@ -775,7 +775,7 @@ export default function StudentAssignment() {
     setChatInput('');
     setPhase('review');
 
-    /** Send behavior signals to Whisper for hidden question inference */
+    /** Send behavior signals + work to Whisper for analysis */
     if (user && (hesCount > 0 || sig.deleteCount >= 2 || sig.answerChanges >= 2)) {
       fetch(`${API}/api/whisper/infer`, {
         method: 'POST',
@@ -788,6 +788,7 @@ export default function StudentAssignment() {
           questionAnswer: correctAnswer,
           studentAnswer: myAnswer,
           isCorrect,
+          workText: workText[q.id] ?? '',
           signals: { hesitations: sig.hesitations, deleteCount: sig.deleteCount, answerChanges: sig.answerChanges },
         }),
       }).catch(() => {});
