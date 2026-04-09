@@ -47,321 +47,45 @@ function Latex({ text, className }: { text: string; className?: string }) {
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-/** Math symbol item */
-type MathSymbolItem = {
-  display: string;
-  insert: string;
-  /** Structured input: fields to fill before inserting */
-  fields?: { label: string; placeholder: string; key: string }[];
-  /** Template with {key} placeholders */
-  template?: string;
-};
-
-/** Math symbol groups for equation editor */
-const mathSymbols: { label: string; items: MathSymbolItem[] }[] = [
-  { label: '기본', items: [
-    { display: '÷', insert: '\\div ' },
-    { display: '×', insert: '\\times ' },
-    { display: '±', insert: '\\pm ' },
-    { display: '≠', insert: '\\neq ' },
-    { display: '≤', insert: '\\leq ' },
-    { display: '≥', insert: '\\geq ' },
-    { display: '∞', insert: '\\infty ' },
-  ]},
-  { label: '분수·근호', items: [
-    { display: '⬚/⬚', insert: '', template: '\\frac{{num}}{{den}}', fields: [
-      { label: '분자', placeholder: '1', key: 'num' },
-      { label: '분모', placeholder: '2', key: 'den' },
-    ]},
-    { display: '√', insert: '', template: '\\sqrt{{val}}', fields: [
-      { label: '값', placeholder: '2', key: 'val' },
-    ]},
-    { display: 'xⁿ', insert: '', template: '{base}^{{exp}}', fields: [
-      { label: '밑', placeholder: 'x', key: 'base' },
-      { label: '지수', placeholder: '2', key: 'exp' },
-    ]},
-    { display: 'x₋', insert: '', template: '{base}_{{sub}}', fields: [
-      { label: '변수', placeholder: 'a', key: 'base' },
-      { label: '아래첨자', placeholder: '1', key: 'sub' },
-    ]},
-  ]},
-  { label: '도형', items: [
-    { display: '∠', insert: '\\angle ' },
-    { display: '△', insert: '\\triangle ' },
-    { display: '∥', insert: '\\parallel ' },
-    { display: '⊥', insert: '\\perp ' },
-    { display: '°', insert: '^\\circ ' },
-    { display: '㎠', insert: '\\text{cm}^2 ' },
-  ]},
-  { label: '그리스', items: [
-    { display: 'π', insert: '\\pi ' },
-    { display: 'θ', insert: '\\theta ' },
-    { display: 'α', insert: '\\alpha ' },
-    { display: 'β', insert: '\\beta ' },
-  ]},
-];
-
 /**
- * Math equation editor with toolbar and preview.
+ * MathLive-based math editor.
  *
- * @param props.value current text
- * @param props.onChange text change handler
+ * @param props.value LaTeX string
+ * @param props.onChange change handler
  * @param props.className optional container class
- * @return editor element
+ * @return math editor element
  */
 function MathEditor({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const isInternalChange = useRef(false);
-  /** Editing math block index */
-  const [editingMath, setEditingMath] = useState<{ tex: string; idx: number } | null>(null);
-  const mathInputRef = useRef<HTMLInputElement>(null);
-  /** Structured input popup */
-  const [structInput, setStructInput] = useState<{ sym: MathSymbolItem; vals: Record<string, string> } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mfRef = useRef<any>(null);
+  const isInternal = useRef(false);
 
-  /**
-   * Convert value to HTML with rendered math.
-   *
-   * @param text raw value
-   * @return HTML string
-   */
-  const toHTML = (text: string): string => {
-    if (!text) return '';
-    return text
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/\$([^$]+)\$/g, (_, tex: string) => {
-        try {
-          const rendered = katex.renderToString(tex, { throwOnError: false });
-          return `<span contenteditable="false" class="inline-block align-middle mx-0.5 px-1 py-0.5 rounded bg-grain/30 cursor-pointer" data-math="${encodeURIComponent(tex)}">${rendered}</span>`;
-        } catch {
-          return `<span contenteditable="false" class="inline-block mx-0.5 px-1 py-0.5 rounded bg-red-50 text-red-500 text-[12px] font-mono cursor-pointer" data-math="${encodeURIComponent(tex)}">${tex}</span>`;
-        }
-      })
-      .replace(/\n/g, '<br>');
-  };
-
-  /**
-   * Extract value from editor DOM.
-   *
-   * @param el editor element
-   * @return raw value string
-   */
-  const fromDOM = (el: HTMLElement): string => {
-    let result = '';
-    el.childNodes.forEach((node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        result += node.textContent ?? '';
-      } else if (node instanceof HTMLElement) {
-        if (node.dataset.math) {
-          result += `$${decodeURIComponent(node.dataset.math)}$`;
-        } else if (node.tagName === 'BR') {
-          result += '\n';
-        } else {
-          result += node.textContent ?? '';
-        }
-      }
-    });
-    return result;
-  };
-
-  /** Sync DOM from value (only on external changes) */
+  /** Mount MathLive math-field */
   useEffect(() => {
-    if (isInternalChange.current) { isInternalChange.current = false; return; }
-    if (editorRef.current) editorRef.current.innerHTML = toHTML(value) || '<br>';
+    import('mathlive').then(() => {
+      if (!containerRef.current || mfRef.current) return;
+      const mf = document.createElement('math-field') as any;
+      mf.style.cssText = 'width:100%;min-height:100px;font-size:18px;border:1px solid #e8e4dc;border-radius:8px;padding:12px 16px;outline:none;';
+      mf.value = value;
+      mf.addEventListener('input', () => {
+        isInternal.current = true;
+        onChange(mf.value);
+      });
+      containerRef.current.appendChild(mf);
+      mfRef.current = mf;
+    });
+    return () => { mfRef.current = null; };
+  }, []);
+
+  /** Sync value from parent */
+  useEffect(() => {
+    if (isInternal.current) { isInternal.current = false; return; }
+    if (mfRef.current && mfRef.current.value !== value) {
+      mfRef.current.value = value;
+    }
   }, [value]);
 
-  /** Handle editor input */
-  const handleInput = () => {
-    if (!editorRef.current) return;
-    isInternalChange.current = true;
-    onChange(fromDOM(editorRef.current));
-  };
-
-  /** Handle click on math block */
-  const handleClick = (e: React.MouseEvent) => {
-    const target = (e.target as HTMLElement).closest('[data-math]') as HTMLElement | null;
-    if (!target?.dataset.math) return;
-    const tex = decodeURIComponent(target.dataset.math);
-    const el = editorRef.current;
-    if (!el) return;
-    const mathEls = el.querySelectorAll('[data-math]');
-    let idx = -1;
-    mathEls.forEach((m, i) => { if (m === target) idx = i; });
-    setEditingMath({ tex, idx });
-    requestAnimationFrame(() => mathInputRef.current?.focus());
-  };
-
-  /** Save edited math */
-  const saveMath = () => {
-    if (!editingMath || !editorRef.current) return;
-    const mathEls = editorRef.current.querySelectorAll('[data-math]');
-    const target = mathEls[editingMath.idx] as HTMLElement;
-    if (target) {
-      target.dataset.math = encodeURIComponent(editingMath.tex);
-      try {
-        target.innerHTML = katex.renderToString(editingMath.tex, { throwOnError: false });
-        target.className = 'inline-block align-middle mx-0.5 px-1 py-0.5 rounded bg-grain/30 cursor-pointer';
-      } catch {
-        target.textContent = editingMath.tex;
-        target.className = 'inline-block mx-0.5 px-1 py-0.5 rounded bg-red-50 text-red-500 text-[12px] font-mono cursor-pointer';
-      }
-    }
-    isInternalChange.current = true;
-    onChange(fromDOM(editorRef.current));
-    setEditingMath(null);
-  };
-
-  /** Insert math from toolbar */
-  const insertSymbol = (insert: string) => {
-    const el = editorRef.current;
-    if (!el) return;
-
-    const sel = window.getSelection();
-    let range: Range;
-    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
-      range = sel.getRangeAt(0);
-    } else {
-      range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-    }
-
-    const span = document.createElement('span');
-    span.contentEditable = 'false';
-    span.dataset.math = encodeURIComponent(insert);
-    span.className = 'inline-block align-middle mx-0.5 px-1 py-0.5 rounded bg-grain/30 cursor-pointer';
-    try {
-      span.innerHTML = katex.renderToString(insert, { throwOnError: false });
-    } catch {
-      span.textContent = insert;
-    }
-
-    range.deleteContents();
-    range.insertNode(span);
-    range.setStartAfter(span);
-    range.collapse(true);
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-
-    isInternalChange.current = true;
-    onChange(fromDOM(el));
-  };
-
-  return (
-    <div className={className}>
-      {/* symbol toolbar */}
-      <div className="flex flex-wrap items-center gap-1 mb-2">
-        {mathSymbols.map((group) => (
-          <div key={group.label} className="flex items-center">
-            <div className="w-px h-4 bg-grain mx-1 first:hidden" />
-            {group.items.map((sym) => (
-              <button
-                key={sym.display}
-                onClick={() => sym.fields ? setStructInput({ sym, vals: {} }) : insertSymbol(sym.insert)}
-                title={`${group.label}: ${sym.display}`}
-                className="w-8 h-8 flex items-center justify-center rounded-md text-[15px] text-ink hover:bg-grain/50 transition-colors cursor-pointer font-mono"
-              >
-                {sym.display}
-              </button>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      {/* contentEditable editor */}
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={handleInput}
-        onClick={handleClick}
-        data-placeholder="풀이과정을 입력하세요..."
-        className="w-full border border-grain rounded-lg px-4 py-3 text-[15px] text-ink leading-relaxed min-h-[100px] focus:outline-none focus:border-ink transition-colors empty:before:content-[attr(data-placeholder)] empty:before:text-ink-muted"
-      />
-
-      {/* structured math input popup */}
-      {structInput && (
-        <div className="mt-2 border border-ink/20 rounded-lg p-4 bg-paper shadow-lg">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-[13px] font-medium text-ink">{structInput.sym.display}</span>
-            {/* live preview */}
-            {(() => {
-              let tex = structInput.sym.template ?? '';
-              structInput.sym.fields?.forEach((f) => {
-                tex = tex.replace(`{${f.key}}`, structInput.vals[f.key] || f.placeholder);
-              });
-              return <Latex text={`$${tex}$`} className="text-[18px] text-ink" />;
-            })()}
-          </div>
-          <div className="flex gap-2 items-end">
-            {structInput.sym.fields?.map((f) => (
-              <div key={f.key} className="flex-1">
-                <label className="text-[10px] font-mono text-ink-muted block mb-1">{f.label}</label>
-                <input
-                  type="text"
-                  value={structInput.vals[f.key] ?? ''}
-                  onChange={(e) => setStructInput({ ...structInput, vals: { ...structInput.vals, [f.key]: e.target.value } })}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      let tex = structInput.sym.template ?? '';
-                      structInput.sym.fields?.forEach((ff) => {
-                        tex = tex.replace(`{${ff.key}}`, structInput.vals[ff.key] || ff.placeholder);
-                      });
-                      insertSymbol(tex);
-                      setStructInput(null);
-                    }
-                    if (e.key === 'Escape') setStructInput(null);
-                  }}
-                  placeholder={f.placeholder}
-                  autoFocus={f === structInput.sym.fields?.[0]}
-                  className="w-full border border-grain rounded-lg px-3 py-2 font-mono text-[14px] text-ink focus:outline-none focus:border-ink transition-colors"
-                />
-              </div>
-            ))}
-            <button
-              onClick={() => {
-                let tex = structInput.sym.template ?? '';
-                structInput.sym.fields?.forEach((f) => {
-                  tex = tex.replace(`{${f.key}}`, structInput.vals[f.key] || f.placeholder);
-                });
-                insertSymbol(tex);
-                setStructInput(null);
-              }}
-              className="h-9 px-4 rounded-lg bg-ink text-paper text-[12px] font-medium cursor-pointer hover:bg-ink-soft transition-colors shrink-0"
-            >
-              삽입
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* math edit popover */}
-      {editingMath && (
-        <div className="mt-2 border border-ink/20 rounded-lg p-3 bg-paper shadow-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] font-mono text-ink-muted">수식 편집</span>
-          </div>
-          <div className="flex gap-2">
-            <input
-              ref={mathInputRef}
-              type="text"
-              value={editingMath.tex}
-              onChange={(e) => setEditingMath({ ...editingMath, tex: e.target.value })}
-              onKeyDown={(e) => { if (e.key === 'Enter') saveMath(); if (e.key === 'Escape') setEditingMath(null); }}
-              className="flex-1 border border-grain rounded-lg px-3 py-2 font-mono text-[13px] text-ink focus:outline-none focus:border-ink transition-colors"
-            />
-            <button onClick={saveMath} className="h-9 px-4 rounded-lg bg-ink text-paper text-[12px] font-medium cursor-pointer hover:bg-ink-soft transition-colors">
-              확인
-            </button>
-          </div>
-          {editingMath.tex && (
-            <div className="mt-2 px-3 py-2 bg-grain/10 rounded-lg">
-              <Latex text={`$${editingMath.tex}$`} className="text-[16px] text-ink block" />
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  return <div ref={containerRef} className={className} />;
 }
 
 /** Single stroke point */
