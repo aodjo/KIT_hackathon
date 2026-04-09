@@ -618,20 +618,23 @@ export default function StudentAssignment() {
   /** Submitting state */
   const [submitting, setSubmitting] = useState(false);
 
+  /** Hesitation moment */
+  type Hesitation = { timestamp: number; duration: number; after: 'typing' | 'drawing' | 'idle' };
   /** Behavior signals per question */
   const signals = useRef<Record<number, {
-    dwellStart: number;
-    totalDwell: number;
+    hesitations: Hesitation[];
     deleteCount: number;
-    pauseCount: number;
-    revisitCount: number;
-    lastInputTime: number;
     answerChanges: number;
+    inputTimes: number[];
   }>>({});
+  /** Last input timestamp for gap detection */
+  const lastInput = useRef<{ time: number; type: 'typing' | 'drawing' | 'idle' }>({ time: 0, type: 'idle' });
+  /** Whether student was recently active (at least 3 inputs in last 10s) */
+  const wasActive = useRef(false);
   /** Pause detection timer */
   const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Detected struggle indicators */
-  const [struggles, setStruggles] = useState<Record<number, string[]>>({});
+  /** Hesitation count for UI update */
+  const [hesitationCounts, setHesitationCounts] = useState<Record<number, number>>({});
 
   /** Fetch assignment info */
   useEffect(() => {
@@ -660,58 +663,60 @@ export default function StudentAssignment() {
    */
   const getSignal = (qId: number) => {
     if (!signals.current[qId]) {
-      signals.current[qId] = {
-        dwellStart: Date.now(),
-        totalDwell: 0,
-        deleteCount: 0,
-        pauseCount: 0,
-        revisitCount: 0,
-        lastInputTime: Date.now(),
-        answerChanges: 0,
-      };
+      signals.current[qId] = { hesitations: [], deleteCount: 0, answerChanges: 0, inputTimes: [] };
     }
     return signals.current[qId];
   };
 
-  /** Track dwell time when question changes */
-  useEffect(() => {
-    if (!q) return;
-    const sig = getSignal(q.id);
-    sig.dwellStart = Date.now();
-    return () => { sig.totalDwell += Date.now() - sig.dwellStart; };
-  }, [currentIdx, q?.id]);
-
-  /** Detect long pause (10s no input) */
-  useEffect(() => {
-    if (!q || phase !== 'answering') return;
-    if (pauseTimer.current) clearTimeout(pauseTimer.current);
-    pauseTimer.current = setTimeout(() => {
-      const sig = getSignal(q.id);
-      sig.pauseCount++;
-      detectStruggle(q.id);
-    }, 10000);
-    return () => { if (pauseTimer.current) clearTimeout(pauseTimer.current); };
-  }, [answers[q?.id ?? 0], workText[q?.id ?? 0], currentIdx, phase]);
-
   /**
-   * Detect struggle patterns and update indicators.
+   * Record an input event and detect hesitation.
    *
-   * @param qId question ID
+   * @param inputType type of input
    * @return void
    */
-  const detectStruggle = (qId: number) => {
-    const sig = signals.current[qId];
-    if (!sig) return;
-    const indicators: string[] = [];
-    const dwell = sig.totalDwell + (Date.now() - sig.dwellStart);
-    if (dwell > 60000) indicators.push('오래 고민 중');
-    if (sig.deleteCount >= 3) indicators.push('답 수정 반복');
-    if (sig.pauseCount >= 2) indicators.push('장시간 멈춤');
-    if (sig.revisitCount >= 2) indicators.push('문제 재방문');
-    if (indicators.length > 0) {
-      setStruggles((prev) => ({ ...prev, [qId]: indicators }));
+  const recordInput = (inputType: 'typing' | 'drawing') => {
+    if (!q) return;
+    const now = Date.now();
+    const sig = getSignal(q.id);
+    sig.inputTimes.push(now);
+
+    /** Check if was active before this gap */
+    const recentInputs = sig.inputTimes.filter((t) => t > now - 15000);
+    const prevActive = wasActive.current;
+    wasActive.current = recentInputs.length >= 3;
+
+    /** Detect hesitation: was active, then gap > 5s */
+    if (prevActive && lastInput.current.time > 0) {
+      const gap = now - lastInput.current.time;
+      if (gap > 5000) {
+        sig.hesitations.push({
+          timestamp: lastInput.current.time,
+          duration: gap,
+          after: lastInput.current.type,
+        });
+        setHesitationCounts((prev) => ({ ...prev, [q.id]: sig.hesitations.length }));
+      }
     }
+
+    lastInput.current = { time: now, type: inputType };
+
+    /** Reset pause timer */
+    if (pauseTimer.current) clearTimeout(pauseTimer.current);
+    pauseTimer.current = setTimeout(() => {
+      if (!q) return;
+      const s = getSignal(q.id);
+      if (wasActive.current) {
+        s.hesitations.push({ timestamp: now, duration: Date.now() - now, after: inputType });
+        setHesitationCounts((prev) => ({ ...prev, [q.id]: s.hesitations.length }));
+      }
+    }, 8000);
   };
+
+  /** Reset activity tracking when question changes */
+  useEffect(() => {
+    wasActive.current = false;
+    lastInput.current = { time: 0, type: 'idle' };
+  }, [currentIdx]);
 
   /**
    * Update answer for current question.
@@ -725,9 +730,8 @@ export default function StudentAssignment() {
     const prev = answers[q.id] ?? '';
     if (value.length < prev.length) sig.deleteCount++;
     if (prev && value !== prev) sig.answerChanges++;
-    sig.lastInputTime = Date.now();
+    recordInput('typing');
     setAnswers((p) => ({ ...p, [q.id]: value }));
-    detectStruggle(q.id);
   };
 
   /**
@@ -746,22 +750,26 @@ export default function StudentAssignment() {
     const isCorrect = myAnswer === correctAnswer.trim();
     setResults((prev) => ({ ...prev, [q.id]: isCorrect }));
 
-    /** Finalize dwell time */
     const sig = getSignal(q.id);
-    sig.totalDwell += Date.now() - sig.dwellStart;
-    detectStruggle(q.id);
+    const hesCount = sig.hesitations.length;
+    const hadDeleteSpree = sig.deleteCount >= 3;
 
     /** Build AI message based on behavior signals */
-    const strug = struggles[q.id] ?? [];
     let aiMsg: string;
     if (isCorrect) {
-      aiMsg = strug.length > 0
-        ? `정답이에요! 그런데 풀면서 좀 고민했던 것 같은데, 어떤 부분이 어려웠나요?`
+      aiMsg = hesCount > 0
+        ? '정답이에요! 풀면서 잠깐 멈췄던 부분이 있었는데, 어떤 부분에서 고민했나요?'
         : '정답이에요! 어떻게 풀었는지 설명해줄 수 있나요?';
     } else {
-      aiMsg = strug.length > 0
-        ? `아쉽네요. ${strug.includes('답 수정 반복') ? '답을 여러 번 바꿨는데, ' : ''}${strug.includes('오래 고민 중') ? '오래 고민했던 것 같아요. ' : ''}어디서 막혔는지 이야기해볼까요?`
-        : '아쉽네요. 어디서 헷갈렸는지 같이 생각해볼까요?';
+      if (hesCount > 0 && hadDeleteSpree) {
+        aiMsg = '아쉽네요. 풀다가 막힌 부분도 있었고, 답도 여러 번 바꿨는데, 어디서부터 헷갈렸는지 이야기해볼까요?';
+      } else if (hesCount > 0) {
+        aiMsg = '아쉽네요. 풀다가 잠깐 멈췄던 부분이 있었는데, 거기서 무슨 생각을 했나요?';
+      } else if (hadDeleteSpree) {
+        aiMsg = '아쉽네요. 답을 여러 번 고쳤는데, 확신이 안 섰던 부분이 어딘가요?';
+      } else {
+        aiMsg = '아쉽네요. 어디서 헷갈렸는지 같이 생각해볼까요?';
+      }
     }
     setChatMessages((prev) => ({ ...prev, [q.id]: [{ role: 'ai', content: aiMsg }] }));
     setChatInput('');
@@ -789,9 +797,6 @@ export default function StudentAssignment() {
   const goPrev = () => {
     if (currentIdx > 0) {
       const prevQ = questions[currentIdx - 1];
-      const sig = getSignal(prevQ.id);
-      sig.revisitCount++;
-      detectStruggle(prevQ.id);
       setCurrentIdx(currentIdx - 1);
       setPhase(results[prevQ.id] !== undefined ? 'review' : 'answering');
     }
@@ -865,12 +870,9 @@ export default function StudentAssignment() {
         const s = signals.current[q.id];
         return s ? {
           questionId: q.id,
-          dwellMs: s.totalDwell,
+          hesitations: s.hesitations,
           deleteCount: s.deleteCount,
-          pauseCount: s.pauseCount,
-          revisitCount: s.revisitCount,
           answerChanges: s.answerChanges,
-          struggles: struggles[q.id] ?? [],
         } : null;
       }).filter(Boolean);
       fetch(`${API}/api/assignments/${id}/signals`, {
@@ -921,15 +923,7 @@ export default function StudentAssignment() {
                 return (
                   <button
                     key={i}
-                    onClick={() => {
-                      if (i !== currentIdx) {
-                        const sig = getSignal(qq.id);
-                        sig.revisitCount++;
-                        detectStruggle(qq.id);
-                      }
-                      setCurrentIdx(i);
-                      setPhase(r !== undefined ? 'review' : 'answering');
-                    }}
+                    onClick={() => { setCurrentIdx(i); setPhase(r !== undefined ? 'review' : 'answering'); }}
                     className={`w-7 h-7 rounded-full text-[11px] font-mono font-medium transition-colors cursor-pointer ${
                       i === currentIdx
                         ? 'bg-ink text-paper'
@@ -1071,7 +1065,7 @@ export default function StudentAssignment() {
                   <DrawCanvas
                     key={q.id}
                     strokes={workDraw[q.id]}
-                    onSave={(s) => setWorkDraw((prev) => ({ ...prev, [q.id]: s }))}
+                    onSave={(s) => { recordInput('drawing'); setWorkDraw((prev) => ({ ...prev, [q.id]: s })); }}
                     height={240}
                     tool={canvasTool}
                     setTool={setCanvasTool}
