@@ -728,8 +728,8 @@ export default function StudentAssignment() {
     if (!q) return;
     const sig = getSignal(q.id);
     const prev = answers[q.id] ?? '';
-    if (value.length < prev.length) sig.deleteCount++;
-    if (prev && value !== prev) sig.answerChanges++;
+    /** Count full rewrites: had a real answer, then cleared most of it */
+    if (prev.length >= 3 && value.length < prev.length * 0.3) sig.deleteCount++;
     recordInput('typing');
     setAnswers((p) => ({ ...p, [q.id]: value }));
   };
@@ -776,7 +776,7 @@ export default function StudentAssignment() {
     setPhase('review');
 
     /** Send behavior signals + work to Whisper for analysis */
-    if (user && (hesCount > 0 || sig.deleteCount >= 2 || sig.answerChanges >= 2)) {
+    if (user && (hesCount > 0 || sig.deleteCount >= 2)) {
       fetch(`${API}/api/whisper/infer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
