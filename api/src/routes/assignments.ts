@@ -184,21 +184,17 @@ assignments.post('/:id/signals', async (c) => {
 
   const stmts = signals.map((s) =>
     c.env.DB.prepare(
-      `INSERT INTO behavior_signals (student_id, signal_type, context, concept_id)
-       VALUES (?, 'assignment_behavior', ?, ?)`,
+      `INSERT INTO behavior_signals (student_id, type, payload)
+       VALUES (?, 'assignment_behavior', ?)`,
     ).bind(
       studentId,
       JSON.stringify({
         assignment_id: assignmentId,
         question_id: s.questionId,
-        dwell_ms: s.dwellMs,
+        hesitations: s.hesitations,
         delete_count: s.deleteCount,
-        pause_count: s.pauseCount,
-        revisit_count: s.revisitCount,
         answer_changes: s.answerChanges,
-        struggles: s.struggles,
       }),
-      null,
     ),
   );
 

@@ -88,8 +88,8 @@ ${body.workText ? `풀이 과정: ${body.workText}` : '(풀이 없음)'}
     /** Store analysis in DB */
     if (parsed.stuck_point && parsed.confidence > 0.3) {
       await c.env.DB.prepare(
-        `INSERT INTO behavior_signals (student_id, signal_type, context, concept_id)
-         VALUES (?, 'stuck_analysis', ?, NULL)`,
+        `INSERT INTO behavior_signals (student_id, type, payload)
+         VALUES (?, 'stuck_analysis', ?)`,
       ).bind(
         body.studentId,
         JSON.stringify({
@@ -120,17 +120,17 @@ whisper.get('/assignment/:assignmentId', async (c) => {
   const assignmentId = c.req.param('assignmentId');
 
   const result = await c.env.DB.prepare(
-    `SELECT bs.student_id, u.name as student_name, bs.context, bs.created_at
+    `SELECT bs.student_id, u.name as student_name, bs.payload, bs.created_at
      FROM behavior_signals bs
      JOIN users u ON bs.student_id = u.id
-     WHERE bs.signal_type = 'stuck_analysis'
-       AND json_extract(bs.context, '$.assignment_id') = ?
+     WHERE bs.type = 'stuck_analysis'
+       AND json_extract(bs.payload, '$.assignment_id') = ?
      ORDER BY bs.created_at DESC`,
   ).bind(assignmentId).all();
 
-  /** Parse context JSON */
+  /** Parse payload JSON */
   const analyses = result.results.map((r: any) => {
-    const ctx = JSON.parse(r.context);
+    const ctx = JSON.parse(r.payload);
     return {
       studentId: r.student_id,
       studentName: r.student_name,
