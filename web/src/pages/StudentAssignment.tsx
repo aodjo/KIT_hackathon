@@ -56,115 +56,204 @@ function Latex({ text, className }: { text: string; className?: string }) {
  * @return math editor element
  */
 function MathEditor({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const mathPopupRef = useRef<HTMLDivElement>(null);
-  const mfRef = useRef<any>(null);
-  const [showMathPopup, setShowMathPopup] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const skipSync = useRef(false);
+  /** Inline math editing state */
+  const [editingMath, setEditingMath] = useState<{ node: HTMLElement | null; latex: string; isNew: boolean } | null>(null);
 
   /**
-   * Open MathLive popup for equation input.
+   * Render value string to editor HTML.
    *
-   * @return void
+   * @param text raw value with $...$
+   * @return HTML string
    */
-  const openMathPopup = () => {
-    setShowMathPopup(true);
-    requestAnimationFrame(() => {
-      if (!mathPopupRef.current || mfRef.current) return;
-      import('mathlive').then(() => {
-        if (!mathPopupRef.current) return;
-        const mf = document.createElement('math-field') as any;
-        mf.style.cssText = 'width:100%;font-size:20px;border:1px solid #e8e4dc;border-radius:8px;padding:12px 16px;outline:none;min-height:50px;';
-        mf.mathModeSpace = '\\;';
-        mathPopupRef.current.appendChild(mf);
-        mfRef.current = mf;
-        mf.focus();
-      });
-    });
+  const toHTML = (text: string): string => {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\$([^$]+)\$/g, (_, tex: string) => {
+        try {
+          const rendered = katex.renderToString(tex, { throwOnError: false });
+          return `<span contenteditable="false" data-math="${encodeURIComponent(tex)}" style="display:inline-block;vertical-align:middle;margin:0 2px;padding:2px 4px;border-radius:4px;background:rgba(232,230,223,0.3);cursor:pointer">${rendered}</span>`;
+        } catch {
+          return `<code contenteditable="false" data-math="${encodeURIComponent(tex)}" style="cursor:pointer;color:#e53e3e">${tex}</code>`;
+        }
+      })
+      .replace(/\n/g, '<br>');
   };
 
   /**
-   * Insert math from popup into textarea and close.
+   * Extract value string from editor DOM.
    *
-   * @return void
+   * @return raw value with $...$
    */
-  const insertMath = () => {
-    if (!mfRef.current) return;
-    const latex = mfRef.current.value?.trim();
-    if (!latex) { closeMathPopup(); return; }
+  const fromDOM = (): string => {
+    const el = editorRef.current;
+    if (!el) return '';
+    let result = '';
+    const walk = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        result += node.textContent ?? '';
+      } else if (node instanceof HTMLElement) {
+        if (node.dataset.math) {
+          result += `$${decodeURIComponent(node.dataset.math)}$`;
+        } else if (node.tagName === 'BR') {
+          result += '\n';
+        } else {
+          node.childNodes.forEach(walk);
+        }
+      }
+    };
+    el.childNodes.forEach(walk);
+    return result;
+  };
 
-    const ta = textareaRef.current;
-    const insert = `$${latex}$`;
-    if (ta) {
-      const start = ta.selectionStart;
-      const before = value.slice(0, start);
-      const after = value.slice(ta.selectionEnd);
-      onChange(before + insert + after);
-      requestAnimationFrame(() => {
-        const pos = start + insert.length;
-        ta.setSelectionRange(pos, pos);
-        ta.focus();
-      });
-    } else {
-      onChange(value + insert);
+  /** Sync DOM from value on external changes */
+  useEffect(() => {
+    if (skipSync.current) { skipSync.current = false; return; }
+    if (!editorRef.current) return;
+    editorRef.current.innerHTML = toHTML(value) || '<br>';
+  }, [value]);
+
+  /** Handle text input */
+  const handleInput = () => {
+    skipSync.current = true;
+    onChange(fromDOM());
+  };
+
+  /** Handle keydown for $ shortcut */
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === '$') {
+      e.preventDefault();
+      insertMathAtCursor();
     }
-    closeMathPopup();
+  };
+
+  /** Handle click on math spans */
+  const handleClick = (e: React.MouseEvent) => {
+    const target = (e.target as HTMLElement).closest('[data-math]') as HTMLElement | null;
+    if (!target?.dataset.math) return;
+    setEditingMath({ node: target, latex: decodeURIComponent(target.dataset.math), isNew: false });
   };
 
   /**
-   * Close math popup and cleanup.
+   * Insert new math block at cursor position.
    *
    * @return void
    */
-  const closeMathPopup = () => {
-    if (mfRef.current) { mfRef.current.remove(); mfRef.current = null; }
-    setShowMathPopup(false);
+  const insertMathAtCursor = () => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const placeholder = document.createElement('span');
+    placeholder.dataset.math = '';
+    placeholder.contentEditable = 'false';
+    placeholder.textContent = '⬚';
+    placeholder.style.cssText = 'display:inline-block;padding:2px 8px;border-radius:4px;background:#f0ede8;cursor:pointer;color:#888';
+
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(placeholder);
+    range.setStartAfter(placeholder);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    setEditingMath({ node: placeholder, latex: '', isNew: true });
+  };
+
+  /**
+   * Save edited math back to DOM.
+   *
+   * @return void
+   */
+  const saveMath = () => {
+    if (!editingMath || !editingMath.node) return;
+    const { node, latex } = editingMath;
+
+    if (!latex.trim()) {
+      node.remove();
+    } else {
+      node.dataset.math = encodeURIComponent(latex);
+      try {
+        node.innerHTML = katex.renderToString(latex, { throwOnError: false });
+        node.style.cssText = 'display:inline-block;vertical-align:middle;margin:0 2px;padding:2px 4px;border-radius:4px;background:rgba(232,230,223,0.3);cursor:pointer';
+      } catch {
+        node.textContent = latex;
+        node.style.cssText = 'cursor:pointer;color:#e53e3e';
+      }
+    }
+
+    setEditingMath(null);
+    skipSync.current = true;
+    onChange(fromDOM());
+    editorRef.current?.focus();
+  };
+
+  /** Delete math and close editor */
+  const deleteMath = () => {
+    if (!editingMath?.node) return;
+    editingMath.node.remove();
+    setEditingMath(null);
+    skipSync.current = true;
+    onChange(fromDOM());
+    editorRef.current?.focus();
   };
 
   return (
     <div className={className}>
-      {/* textarea with math button */}
-      <div className="relative">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="풀이과정을 입력하세요..."
-          rows={5}
-          className="w-full border border-grain rounded-lg px-4 py-3 pr-12 text-[14px] text-ink resize-none focus:outline-none focus:border-ink transition-colors leading-relaxed"
-        />
+      {/* toolbar */}
+      <div className="flex items-center gap-2 mb-2">
         <button
-          onClick={openMathPopup}
-          title="수식 입력"
-          className="absolute right-3 top-3 w-8 h-8 flex items-center justify-center rounded-lg text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer"
+          onClick={insertMathAtCursor}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-mono text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer border border-grain"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 20h4l10.5-10.5a2.121 2.121 0 0 0-3-3L5 17v3Z" /><path d="m13.5 6.5 3 3" />
-          </svg>
+          <span className="text-[14px]">∑</span> 수식 삽입
         </button>
+        <span className="text-[11px] text-ink-muted font-mono">또는 $ 키</span>
       </div>
 
-      {/* rendered preview */}
-      {value.includes('$') && (
-        <div className="mt-2 border border-grain/50 rounded-lg px-4 py-3 bg-grain/10">
-          <span className="text-[9px] font-mono text-ink-muted block mb-1">미리보기</span>
-          <Latex text={value} className="text-[15px] text-ink leading-relaxed block whitespace-pre-wrap" />
-        </div>
-      )}
+      {/* editor */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleInput}
+        onKeyDown={handleKeyDown}
+        onClick={handleClick}
+        data-placeholder="풀이과정을 입력하세요..."
+        className="w-full border border-grain rounded-lg px-4 py-3 text-[15px] text-ink leading-relaxed min-h-[120px] focus:outline-none focus:border-ink transition-colors [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-ink-muted"
+      />
 
-      {/* math input popup */}
-      {showMathPopup && (
+      {/* inline math editor */}
+      {editingMath && (
         <div className="mt-2 border border-ink/20 rounded-lg p-4 bg-paper shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[12px] font-mono text-ink-muted">수식 입력</span>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-[12px] font-mono text-ink-muted">수식 편집</span>
+            {editingMath.latex && (
+              <Latex text={`$${editingMath.latex}$`} className="text-[18px] text-ink" />
+            )}
           </div>
-          <div ref={mathPopupRef} className="mb-3" />
-          <div className="flex gap-2 justify-end">
-            <button onClick={closeMathPopup} className="h-9 px-4 rounded-lg text-[12px] font-medium text-ink hover:bg-grain/50 transition-colors cursor-pointer">
-              취소
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={editingMath.latex}
+              onChange={(e) => setEditingMath({ ...editingMath, latex: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveMath(); if (e.key === 'Escape') { if (editingMath.isNew) deleteMath(); else setEditingMath(null); } }}
+              placeholder="LaTeX 입력 (예: \frac{1}{2})"
+              autoFocus
+              className="flex-1 border border-grain rounded-lg px-3 py-2 font-mono text-[14px] text-ink focus:outline-none focus:border-ink transition-colors"
+            />
+            <button onClick={saveMath} className="h-9 px-4 rounded-lg bg-ink text-paper text-[12px] font-medium cursor-pointer hover:bg-ink-soft transition-colors">
+              확인
             </button>
-            <button onClick={insertMath} className="h-9 px-4 rounded-lg bg-ink text-paper text-[12px] font-medium cursor-pointer hover:bg-ink-soft transition-colors">
-              삽입
-            </button>
+            {!editingMath.isNew && (
+              <button onClick={deleteMath} className="h-9 px-3 rounded-lg text-[12px] font-medium text-red-500 hover:bg-red-50 transition-colors cursor-pointer">
+                삭제
+              </button>
+            )}
           </div>
         </div>
       )}
