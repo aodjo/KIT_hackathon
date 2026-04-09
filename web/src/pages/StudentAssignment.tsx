@@ -605,8 +605,10 @@ export default function StudentAssignment() {
   const [workDraw, setWorkDraw] = useState<Record<number, Stroke[]>>({});
   /** Current question index */
   const [currentIdx, setCurrentIdx] = useState(0);
-  /** Phase per question: answering or review */
-  const [phase, setPhase] = useState<'answering' | 'review'>('answering');
+  /** Phase per question: answering → wrong (retry) → mirror (explain to past-self) */
+  const [phase, setPhase] = useState<'answering' | 'wrong' | 'mirror'>('answering');
+  /** Wrong attempt count per question */
+  const [attempts, setAttempts] = useState<Record<number, number>>({});
   /** Per-question correctness keyed by question ID */
   const [results, setResults] = useState<Record<number, boolean>>({});
   /** AI discussion messages keyed by question ID */
@@ -748,35 +750,30 @@ export default function StudentAssignment() {
       if (Array.isArray(parsed)) correctAnswer = parsed[0];
     } catch { /* not JSON */ }
     const isCorrect = myAnswer === correctAnswer.trim();
-    setResults((prev) => ({ ...prev, [q.id]: isCorrect }));
-
     const sig = getSignal(q.id);
-    const hesCount = sig.hesitations.length;
-    const hadDeleteSpree = sig.deleteCount >= 3;
 
-    /** Build AI message based on behavior signals */
-    let aiMsg: string;
-    if (isCorrect) {
-      aiMsg = hesCount > 0
-        ? '정답이에요! 풀면서 잠깐 멈췄던 부분이 있었는데, 어떤 부분에서 고민했나요?'
-        : '정답이에요! 어떻게 풀었는지 설명해줄 수 있나요?';
-    } else {
-      if (hesCount > 0 && hadDeleteSpree) {
-        aiMsg = '아쉽네요. 풀다가 막힌 부분도 있었고, 답도 여러 번 바꿨는데, 어디서부터 헷갈렸는지 이야기해볼까요?';
-      } else if (hesCount > 0) {
-        aiMsg = '아쉽네요. 풀다가 잠깐 멈췄던 부분이 있었는데, 거기서 무슨 생각을 했나요?';
-      } else if (hadDeleteSpree) {
-        aiMsg = '아쉽네요. 답을 여러 번 고쳤는데, 확신이 안 섰던 부분이 어딘가요?';
-      } else {
-        aiMsg = '아쉽네요. 어디서 헷갈렸는지 같이 생각해볼까요?';
-      }
+    if (!isCorrect) {
+      /** Wrong → retry */
+      setAttempts((prev) => ({ ...prev, [q.id]: (prev[q.id] ?? 0) + 1 }));
+      setPhase('wrong');
+      return;
     }
-    setChatMessages((prev) => ({ ...prev, [q.id]: [{ role: 'ai', content: aiMsg }] }));
-    setChatInput('');
-    setPhase('review');
 
-    /** Send behavior signals + work to Whisper for analysis */
-    if (user && (hesCount > 0 || sig.deleteCount >= 2)) {
+    /** Correct → enter MirrorMind (past-self dialogue) */
+    setResults((prev) => ({ ...prev, [q.id]: true }));
+    const attemptCount = attempts[q.id] ?? 0;
+
+    /** MirrorMind plays confused past-self, asks naive questions */
+    const mirrorMsg = attemptCount > 0
+      ? `오 맞았다! 근데 나는 아직 잘 모르겠어... 처음에 틀렸을 때랑 지금이 뭐가 달라진 거야? 나한테 설명해줄 수 있어?`
+      : `오 정답이래! 근데 나는 이 문제 어떻게 푸는 건지 잘 모르겠거든... 어떻게 풀었는지 나한테 쉽게 설명해줄 수 있어?`;
+
+    setChatMessages((prev) => ({ ...prev, [q.id]: [{ role: 'ai', content: mirrorMsg }] }));
+    setChatInput('');
+    setPhase('mirror');
+
+    /** Send behavior signals to Whisper for teacher analysis */
+    if (user && (sig.hesitations.length > 0 || sig.deleteCount >= 2)) {
       fetch(`${API}/api/whisper/infer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -787,9 +784,9 @@ export default function StudentAssignment() {
           questionText: q.question,
           questionAnswer: correctAnswer,
           studentAnswer: myAnswer,
-          isCorrect,
+          isCorrect: true,
           workText: workText[q.id] ?? '',
-          signals: { hesitations: sig.hesitations, deleteCount: sig.deleteCount, answerChanges: sig.answerChanges },
+          signals: { hesitations: sig.hesitations, deleteCount: sig.deleteCount, answerChanges: 0 },
         }),
       }).catch(() => {});
     }
@@ -802,8 +799,9 @@ export default function StudentAssignment() {
    */
   const goNext = () => {
     if (currentIdx < questions.length - 1) {
+      const nextQ = questions[currentIdx + 1];
       setCurrentIdx(currentIdx + 1);
-      setPhase('answering');
+      setPhase(results[nextQ.id] ? 'mirror' : 'answering');
       setChatInput('');
     }
   };
@@ -817,7 +815,7 @@ export default function StudentAssignment() {
     if (currentIdx > 0) {
       const prevQ = questions[currentIdx - 1];
       setCurrentIdx(currentIdx - 1);
-      setPhase(results[prevQ.id] !== undefined ? 'review' : 'answering');
+      setPhase(results[prevQ.id] ? 'mirror' : 'answering');
     }
   };
 
@@ -826,19 +824,53 @@ export default function StudentAssignment() {
    *
    * @return void
    */
-  const sendChat = () => {
-    if (!q || !chatInput.trim()) return;
+  /** Chat loading state */
+  const [chatLoading, setChatLoading] = useState(false);
+
+  /**
+   * Send message to MirrorMind (past-self AI).
+   *
+   * @return void
+   */
+  const sendChat = async () => {
+    if (!q || !chatInput.trim() || chatLoading) return;
     const msgs = chatMessages[q.id] ?? [];
-    const newMsgs = [...msgs, { role: 'student' as const, content: chatInput.trim() }];
-
-    /** Simple AI response based on context */
-    const aiReply = msgs.length < 3
-      ? '좋은 생각이에요. 조금 더 자세히 설명해줄 수 있나요?'
-      : '잘 이해하고 있네요! 다음 문제로 넘어가볼까요?';
-    newMsgs.push({ role: 'ai', content: aiReply });
-
-    setChatMessages((prev) => ({ ...prev, [q.id]: newMsgs }));
+    const withStudent = [...msgs, { role: 'student' as const, content: chatInput.trim() }];
+    setChatMessages((prev) => ({ ...prev, [q.id]: withStudent }));
     setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const res = await fetch(`${API}/api/mirror/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionText: q.question,
+          messages: withStudent.map((m) => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })),
+        }),
+      });
+      const data = await res.json();
+      const aiReply = data.reply ?? '음... 잘 모르겠어. 좀 더 쉽게 설명해줄 수 있어?';
+      setChatMessages((prev) => ({
+        ...prev,
+        [q.id]: [...(prev[q.id] ?? []), { role: 'ai', content: aiReply }],
+      }));
+    } catch {
+      /** Fallback if API fails */
+      const fallbacks = [
+        '음... 그게 무슨 뜻이야? 좀 더 쉽게 설명해줄 수 있어?',
+        '아 그렇구나... 근데 왜 그렇게 되는 거야?',
+        '오 좀 알 것 같아! 그럼 다른 경우에도 그렇게 되는 거야?',
+        '아 이제 이해했어! 고마워!',
+      ];
+      const idx = Math.min((msgs.length - 1) / 2, fallbacks.length - 1);
+      setChatMessages((prev) => ({
+        ...prev,
+        [q.id]: [...(prev[q.id] ?? []), { role: 'ai', content: fallbacks[Math.floor(idx)] }],
+      }));
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   /**
@@ -942,7 +974,7 @@ export default function StudentAssignment() {
                 return (
                   <button
                     key={i}
-                    onClick={() => { setCurrentIdx(i); setPhase(r !== undefined ? 'review' : 'answering'); }}
+                    onClick={() => { setCurrentIdx(i); setPhase(r ? 'mirror' : 'answering'); }}
                     className={`w-7 h-7 rounded-full text-[11px] font-mono font-medium transition-colors cursor-pointer ${
                       i === currentIdx
                         ? 'bg-ink text-paper'
@@ -1016,9 +1048,7 @@ export default function StudentAssignment() {
                           onClick={() => phase === 'answering' && setAnswer(k)}
                           className={`w-full text-left px-5 py-3 rounded-lg border transition-colors ${phase === 'answering' ? 'cursor-pointer' : ''} ${
                             selected
-                              ? phase === 'review'
-                                ? 'border-ink/30 bg-ink/5'
-                                : 'border-ink bg-ink/5'
+                              ? 'border-ink bg-ink/5'
                               : 'border-grain' + (phase === 'answering' ? ' hover:border-ink/30' : '')
                           }`}
                         >
@@ -1033,10 +1063,10 @@ export default function StudentAssignment() {
                 <input
                   type="text"
                   value={answers[q.id] ?? ''}
-                  onChange={(e) => phase === 'answering' && setAnswer(e.target.value)}
+                  onChange={(e) => setAnswer(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && currentAnswered && phase === 'answering') submitCurrentQuestion(); }}
                   placeholder="답을 입력하세요"
-                  disabled={phase === 'review'}
+                  disabled={phase === 'mirror' || phase === 'wrong'}
                   autoFocus
                   className="w-full border border-grain rounded-lg px-5 py-3 font-mono text-[16px] text-ink focus:outline-none focus:border-ink transition-colors disabled:bg-grain/20"
                 />
@@ -1100,14 +1130,32 @@ export default function StudentAssignment() {
               </div>
             </div>
 
-            {/* review phase: result + AI discussion */}
-            {phase === 'review' && q && (
+            {/* wrong phase: retry prompt */}
+            {phase === 'wrong' && q && (
               <div className="mt-6 border-t border-grain pt-6">
-                {/* result banner */}
-                <div className={`rounded-lg p-4 mb-4 ${results[q.id] ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
+                <div className="rounded-lg p-4 mb-4 bg-red-50 border border-red-200">
                   <p className="text-[15px] font-medium text-ink">
-                    {results[q.id] ? '정답입니다!' : '오답입니다.'}
+                    오답입니다. {(attempts[q.id] ?? 0) > 1 ? `(${attempts[q.id]}번째 시도)` : ''} 다시 풀어보세요.
                   </p>
+                </div>
+                <button
+                  onClick={() => { setAnswers((p) => ({ ...p, [q.id]: '' })); setPhase('answering'); }}
+                  className="h-10 px-5 rounded-lg bg-ink text-paper text-[13px] font-medium cursor-pointer hover:bg-ink-soft transition-colors"
+                >
+                  다시 풀기
+                </button>
+              </div>
+            )}
+
+            {/* mirror phase: MirrorMind past-self dialogue */}
+            {phase === 'mirror' && q && (
+              <div className="mt-6 border-t border-grain pt-6">
+                <div className="rounded-lg p-4 mb-4 bg-emerald-50 border border-emerald-200">
+                  <p className="text-[15px] font-medium text-ink">정답입니다!</p>
+                </div>
+
+                <div className="mb-3">
+                  <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">과거의 나에게 설명하기</span>
                 </div>
 
                 {/* chat messages */}
@@ -1115,13 +1163,19 @@ export default function StudentAssignment() {
                   {(chatMessages[q.id] ?? []).map((msg, i) => (
                     <div key={i} className="flex flex-col gap-1">
                       <span className={`text-[10px] uppercase tracking-[0.14em] font-mono font-medium ${msg.role === 'ai' ? 'text-clay-deep' : 'text-ink'}`}>
-                        {msg.role === 'ai' ? 'AI 튜터' : '나'}
+                        {msg.role === 'ai' ? '과거의 나' : '나'}
                       </span>
                       <p className={`text-[15px] leading-relaxed ${msg.role === 'ai' ? 'text-ink-muted' : 'text-ink'}`}>
                         {msg.content}
                       </p>
                     </div>
                   ))}
+                  {chatLoading && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase tracking-[0.14em] font-mono font-medium text-clay-deep">과거의 나</span>
+                      <span className="text-[14px] text-ink-muted animate-pulse">생각 중...</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* chat input */}
@@ -1130,13 +1184,14 @@ export default function StudentAssignment() {
                     type="text"
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') sendChat(); }}
-                    placeholder="질문하거나 풀이를 설명해보세요..."
-                    className="flex-1 border border-grain rounded-lg px-4 py-2.5 text-[14px] text-ink focus:outline-none focus:border-ink transition-colors"
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !chatLoading) sendChat(); }}
+                    placeholder="과거의 나에게 설명해주세요..."
+                    disabled={chatLoading}
+                    className="flex-1 border border-grain rounded-lg px-4 py-2.5 text-[14px] text-ink focus:outline-none focus:border-ink transition-colors disabled:bg-grain/20"
                   />
                   <button
                     onClick={sendChat}
-                    disabled={!chatInput.trim()}
+                    disabled={!chatInput.trim() || chatLoading}
                     className="h-10 px-4 rounded-lg bg-ink text-paper text-[13px] font-medium cursor-pointer hover:bg-ink-soft transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     전송
@@ -1162,6 +1217,8 @@ export default function StudentAssignment() {
                 >
                   제출
                 </button>
+              ) : phase === 'wrong' ? (
+                <div />
               ) : isLast ? (
                 <button
                   onClick={handleFinalSubmit}
