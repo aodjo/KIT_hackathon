@@ -987,18 +987,6 @@ export default function StudentAssignment() {
                 <span className="text-[10px] font-mono text-ink-muted">{q.school_level} &gt; {q.grade} &gt; {q.curriculum_topic}</span>
               </div>
 
-              {/* struggle indicator */}
-              {struggles[q.id]?.length > 0 && phase === 'answering' && (
-                <div className="flex items-center gap-1.5 mb-4 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><path d="M12 16h.01" />
-                  </svg>
-                  <span className="text-[12px] text-amber-700 font-mono">
-                    {struggles[q.id].join(' · ')}
-                  </span>
-                </div>
-              )}
-
               {/* question text */}
               <Latex text={q.question} className="text-[18px] text-ink leading-relaxed block mb-6" />
 
