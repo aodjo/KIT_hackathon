@@ -774,6 +774,24 @@ export default function StudentAssignment() {
     setChatMessages((prev) => ({ ...prev, [q.id]: [{ role: 'ai', content: aiMsg }] }));
     setChatInput('');
     setPhase('review');
+
+    /** Send behavior signals to Whisper for hidden question inference */
+    if (user && (hesCount > 0 || sig.deleteCount >= 2 || sig.answerChanges >= 2)) {
+      fetch(`${API}/api/whisper/infer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: user.id,
+          assignmentId: id,
+          questionId: q.id,
+          questionText: q.question,
+          questionAnswer: correctAnswer,
+          studentAnswer: myAnswer,
+          isCorrect,
+          signals: { hesitations: sig.hesitations, deleteCount: sig.deleteCount, answerChanges: sig.answerChanges },
+        }),
+      }).catch(() => {});
+    }
   };
 
   /**

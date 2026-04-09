@@ -6,6 +6,7 @@ import classes from './routes/classes';
 import assignments from './routes/assignments';
 import questions from './routes/questions';
 import workbooks from './routes/workbooks';
+import whisper from './routes/whisper';
 
 /** Hono app instance */
 const app = new Hono<{ Bindings: Env }>();
@@ -19,6 +20,7 @@ app.route('/api/classes', classes);
 app.route('/api/assignments', assignments);
 app.route('/api/questions', questions);
 app.route('/api/workbooks', workbooks);
+app.route('/api/whisper', whisper);
 
 /**
  * Health check endpoint.

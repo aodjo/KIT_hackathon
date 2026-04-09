@@ -79,7 +79,9 @@ export default function AssignmentDetail() {
   /** Student submissions */
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   /** Active tab */
-  const [tab, setTab] = useState<'questions' | 'submissions'>('questions');
+  const [tab, setTab] = useState<'questions' | 'submissions' | 'whisper'>('questions');
+  /** Hidden questions from Whisper */
+  const [hiddenQuestions, setHiddenQuestions] = useState<{ studentName: string; questionId: number; inferredQuestion: string; confidence: number; createdAt: string }[]>([]);
 
   /** Fetch assignment + submissions */
   useEffect(() => {
@@ -98,6 +100,15 @@ export default function AssignmentDetail() {
     fetch(`${API}/api/assignments/${id}/questions`)
       .then((r) => r.json())
       .then((d) => setQuestions(d.questions ?? []));
+  }, [id]);
+
+  /** Fetch hidden questions from Whisper */
+  useEffect(() => {
+    if (!id) return;
+    fetch(`${API}/api/whisper/assignment/${id}`)
+      .then((r) => r.json())
+      .then((d) => setHiddenQuestions(d.questions ?? []))
+      .catch(() => {});
   }, [id]);
 
   if (!assignment) {
@@ -146,10 +157,16 @@ export default function AssignmentDetail() {
           >
             제출 ({submissions.length})
           </button>
+          <button
+            onClick={() => setTab('whisper')}
+            className={`px-4 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer ${tab === 'whisper' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'}`}
+          >
+            숨은 질문 {hiddenQuestions.length > 0 && `(${hiddenQuestions.length})`}
+          </button>
         </div>
 
         {/* content */}
-        {tab === 'questions' ? (
+        {tab === 'questions' && (
           questions.length === 0 ? (
             <div className="border border-grain rounded-lg p-8 text-center">
               <p className="text-[14px] text-ink-muted">문제가 없습니다.</p>
@@ -192,7 +209,8 @@ export default function AssignmentDetail() {
               ))}
             </div>
           )
-        ) : (
+        )}
+        {tab === 'submissions' && (
           submissions.length === 0 ? (
             <div className="border border-grain rounded-lg p-8 text-center">
               <p className="text-[14px] text-ink-muted">아직 제출한 학생이 없습니다.</p>
@@ -225,6 +243,36 @@ export default function AssignmentDetail() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )
+        )}
+        {tab === 'whisper' && (
+          hiddenQuestions.length === 0 ? (
+            <div className="border border-grain rounded-lg p-8 text-center">
+              <p className="text-[14px] text-ink-muted">아직 감지된 숨은 질문이 없습니다.</p>
+              <p className="text-[12px] text-ink-muted mt-1">학생들이 문제를 풀면서 막히는 순간이 감지되면 여기에 표시됩니다.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {hiddenQuestions.map((hq, i) => (
+                <div key={i} className="border border-grain rounded-lg p-5 bg-paper">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-medium text-ink">{hq.studentName}</span>
+                      <span className="text-[10px] font-mono text-ink-muted">문제 {questions.findIndex((q) => q.id === hq.questionId) + 1}</span>
+                    </div>
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                      hq.confidence > 0.7 ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-amber-50 text-amber-600 border border-amber-200'
+                    }`}>
+                      {Math.round(hq.confidence * 100)}%
+                    </span>
+                  </div>
+                  <p className="text-[15px] text-ink leading-relaxed italic">"{hq.inferredQuestion}"</p>
+                  <p className="text-[11px] text-ink-muted font-mono mt-2">
+                    {new Date(hq.createdAt).toLocaleString('ko-KR')}
+                  </p>
+                </div>
+              ))}
             </div>
           )
         )}
