@@ -66,6 +66,7 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
       if (!containerRef.current || mfRef.current) return;
       const mf = document.createElement('math-field') as any;
       mf.style.cssText = 'width:100%;min-height:100px;font-size:18px;border:1px solid #e8e4dc;border-radius:8px;padding:12px 16px;outline:none;';
+      mf.mathModeSpace = '\\;';
       mf.value = value;
       mf.addEventListener('input', () => {
         isInternal.current = true;
