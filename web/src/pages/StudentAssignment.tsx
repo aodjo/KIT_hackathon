@@ -56,37 +56,120 @@ function Latex({ text, className }: { text: string; className?: string }) {
  * @return math editor element
  */
 function MathEditor({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mathPopupRef = useRef<HTMLDivElement>(null);
   const mfRef = useRef<any>(null);
-  const isInternal = useRef(false);
+  const [showMathPopup, setShowMathPopup] = useState(false);
 
-  /** Mount MathLive math-field */
-  useEffect(() => {
-    import('mathlive').then(() => {
-      if (!containerRef.current || mfRef.current) return;
-      const mf = document.createElement('math-field') as any;
-      mf.style.cssText = 'width:100%;min-height:100px;font-size:18px;border:1px solid #e8e4dc;border-radius:8px;padding:12px 16px;outline:none;';
-      mf.mathModeSpace = '\\;';
-      mf.value = value;
-      mf.addEventListener('input', () => {
-        isInternal.current = true;
-        onChange(mf.value);
+  /**
+   * Open MathLive popup for equation input.
+   *
+   * @return void
+   */
+  const openMathPopup = () => {
+    setShowMathPopup(true);
+    requestAnimationFrame(() => {
+      if (!mathPopupRef.current || mfRef.current) return;
+      import('mathlive').then(() => {
+        if (!mathPopupRef.current) return;
+        const mf = document.createElement('math-field') as any;
+        mf.style.cssText = 'width:100%;font-size:20px;border:1px solid #e8e4dc;border-radius:8px;padding:12px 16px;outline:none;min-height:50px;';
+        mf.mathModeSpace = '\\;';
+        mathPopupRef.current.appendChild(mf);
+        mfRef.current = mf;
+        mf.focus();
       });
-      containerRef.current.appendChild(mf);
-      mfRef.current = mf;
     });
-    return () => { mfRef.current = null; };
-  }, []);
+  };
 
-  /** Sync value from parent */
-  useEffect(() => {
-    if (isInternal.current) { isInternal.current = false; return; }
-    if (mfRef.current && mfRef.current.value !== value) {
-      mfRef.current.value = value;
+  /**
+   * Insert math from popup into textarea and close.
+   *
+   * @return void
+   */
+  const insertMath = () => {
+    if (!mfRef.current) return;
+    const latex = mfRef.current.value?.trim();
+    if (!latex) { closeMathPopup(); return; }
+
+    const ta = textareaRef.current;
+    const insert = `$${latex}$`;
+    if (ta) {
+      const start = ta.selectionStart;
+      const before = value.slice(0, start);
+      const after = value.slice(ta.selectionEnd);
+      onChange(before + insert + after);
+      requestAnimationFrame(() => {
+        const pos = start + insert.length;
+        ta.setSelectionRange(pos, pos);
+        ta.focus();
+      });
+    } else {
+      onChange(value + insert);
     }
-  }, [value]);
+    closeMathPopup();
+  };
 
-  return <div ref={containerRef} className={className} />;
+  /**
+   * Close math popup and cleanup.
+   *
+   * @return void
+   */
+  const closeMathPopup = () => {
+    if (mfRef.current) { mfRef.current.remove(); mfRef.current = null; }
+    setShowMathPopup(false);
+  };
+
+  return (
+    <div className={className}>
+      {/* textarea with math button */}
+      <div className="relative">
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="풀이과정을 입력하세요..."
+          rows={5}
+          className="w-full border border-grain rounded-lg px-4 py-3 pr-12 text-[14px] text-ink resize-none focus:outline-none focus:border-ink transition-colors leading-relaxed"
+        />
+        <button
+          onClick={openMathPopup}
+          title="수식 입력"
+          className="absolute right-3 top-3 w-8 h-8 flex items-center justify-center rounded-lg text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 20h4l10.5-10.5a2.121 2.121 0 0 0-3-3L5 17v3Z" /><path d="m13.5 6.5 3 3" />
+          </svg>
+        </button>
+      </div>
+
+      {/* rendered preview */}
+      {value.includes('$') && (
+        <div className="mt-2 border border-grain/50 rounded-lg px-4 py-3 bg-grain/10">
+          <span className="text-[9px] font-mono text-ink-muted block mb-1">미리보기</span>
+          <Latex text={value} className="text-[15px] text-ink leading-relaxed block whitespace-pre-wrap" />
+        </div>
+      )}
+
+      {/* math input popup */}
+      {showMathPopup && (
+        <div className="mt-2 border border-ink/20 rounded-lg p-4 bg-paper shadow-lg">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[12px] font-mono text-ink-muted">수식 입력</span>
+          </div>
+          <div ref={mathPopupRef} className="mb-3" />
+          <div className="flex gap-2 justify-end">
+            <button onClick={closeMathPopup} className="h-9 px-4 rounded-lg text-[12px] font-medium text-ink hover:bg-grain/50 transition-colors cursor-pointer">
+              취소
+            </button>
+            <button onClick={insertMath} className="h-9 px-4 rounded-lg bg-ink text-paper text-[12px] font-medium cursor-pointer hover:bg-ink-soft transition-colors">
+              삽입
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Single stroke point */
