@@ -846,6 +846,7 @@ export default function StudentAssignment() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           questionText: q.question,
+          workText: workText[q.id] ?? '',
           messages: withStudent.map((m) => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })),
         }),
       });

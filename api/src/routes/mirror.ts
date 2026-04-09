@@ -13,8 +13,9 @@ const mirror = new Hono<{ Bindings: Env }>();
  * @return AI reply as past-self
  */
 mirror.post('/chat', async (c) => {
-  const { questionText, messages } = await c.req.json<{
+  const { questionText, workText, messages } = await c.req.json<{
     questionText: string;
+    workText?: string;
     messages: { role: string; content: string }[];
   }>();
 
@@ -41,7 +42,8 @@ mirror.post('/chat', async (c) => {
 - 상대방이 충분히 깊게 설명하면 "아 그래서 그렇구나!" 하고 이해해라
 - 반말, 짧게 1~2문장
 
-문제: ${questionText}`,
+문제: ${questionText}
+${workText ? `\n상대방의 풀이 과정:\n${workText}` : ''}`,
       messages: messages.map((m) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
