@@ -666,8 +666,8 @@ export default function StudentAssignment() {
 
     /** Initial AI message */
     const aiMsg = isCorrect
-      ? `정답이에요! ${q.explanation ? '이 문제의 핵심을 설명해줄 수 있나요?' : '어떻게 풀었는지 설명해줄 수 있나요?'}`
-      : `아쉽네요. 정답은 ${correctAnswer}입니다. ${q.explanation || ''} 어디서 헷갈렸는지 같이 생각해볼까요?`;
+      ? '정답이에요! 어떻게 풀었는지 설명해줄 수 있나요?'
+      : '아쉽네요. 어디서 헷갈렸는지 같이 생각해볼까요?';
     setChatMessages((prev) => ({ ...prev, [q.id]: [{ role: 'ai', content: aiMsg }] }));
     setChatInput('');
     setPhase('review');
@@ -876,15 +876,11 @@ export default function StudentAssignment() {
                           key={k}
                           onClick={() => phase === 'answering' && setAnswer(k)}
                           className={`w-full text-left px-5 py-3 rounded-lg border transition-colors ${phase === 'answering' ? 'cursor-pointer' : ''} ${
-                            phase === 'review'
-                              ? k === (() => { try { return JSON.parse(q.answer)[0] ?? q.answer; } catch { return q.answer; } })()
-                                ? 'border-emerald-400 bg-emerald-50'
-                                : selected
-                                  ? 'border-red-400 bg-red-50'
-                                  : 'border-grain'
-                              : selected
-                                ? 'border-ink bg-ink/5'
-                                : 'border-grain hover:border-ink/30'
+                            selected
+                              ? phase === 'review'
+                                ? 'border-ink/30 bg-ink/5'
+                                : 'border-ink bg-ink/5'
+                              : 'border-grain' + (phase === 'answering' ? ' hover:border-ink/30' : '')
                           }`}
                         >
                           <span className="text-[14px] font-mono text-ink-muted mr-3">{'①②③④⑤'[Number(k) - 1] ?? k}</span>
@@ -971,11 +967,7 @@ export default function StudentAssignment() {
                 {/* result banner */}
                 <div className={`rounded-lg p-4 mb-4 ${results[q.id] ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
                   <p className="text-[15px] font-medium text-ink">
-                    {results[q.id] ? '정답입니다!' : (() => {
-                      let ans = q.answer;
-                      try { const p = JSON.parse(ans); if (Array.isArray(p)) ans = p.join(', '); } catch {}
-                      return `오답입니다. 정답: ${ans}`;
-                    })()}
+                    {results[q.id] ? '정답입니다!' : '오답입니다.'}
                   </p>
                 </div>
 
