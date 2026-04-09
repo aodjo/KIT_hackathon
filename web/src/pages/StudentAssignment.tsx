@@ -55,18 +55,44 @@ function Latex({ text, className }: { text: string; className?: string }) {
  * @param props.className optional container class
  * @return math editor element
  */
+/** Math toolbar tab definitions */
+const mathTabs = [
+  { id: 'basic', label: '기본', symbols: [
+    { latex: '+', display: '+' }, { latex: '-', display: '−' }, { latex: '\\times', display: '×' }, { latex: '\\div', display: '÷' },
+    { latex: '=', display: '=' }, { latex: '\\neq', display: '≠' }, { latex: '<', display: '<' }, { latex: '>', display: '>' },
+    { latex: '\\leq', display: '≤' }, { latex: '\\geq', display: '≥' }, { latex: '\\pm', display: '±' }, { latex: '\\infty', display: '∞' },
+  ]},
+  { id: 'frac', label: '분수·지수', symbols: [
+    { latex: '\\frac{□}{□}', display: '⬚/⬚', fields: ['분자', '분모'], template: '\\frac{%0}{%1}' },
+    { latex: '\\sqrt{□}', display: '√⬚', fields: ['값'], template: '\\sqrt{%0}' },
+    { latex: '^{□}', display: 'xⁿ', fields: ['밑', '지수'], template: '%0^{%1}' },
+    { latex: '_{□}', display: 'x₋', fields: ['변수', '첨자'], template: '%0_{%1}' },
+    { latex: '\\log', display: 'log' }, { latex: '\\ln', display: 'ln' },
+  ]},
+  { id: 'geo', label: '도형', symbols: [
+    { latex: '\\angle', display: '∠' }, { latex: '\\triangle', display: '△' }, { latex: '\\square', display: '□' },
+    { latex: '\\parallel', display: '∥' }, { latex: '\\perp', display: '⊥' }, { latex: '^\\circ', display: '°' },
+    { latex: '\\overline{□}', display: 'AB̅', fields: ['문자'], template: '\\overline{%0}' },
+    { latex: '\\text{cm}^2', display: 'cm²' }, { latex: '\\text{cm}', display: 'cm' },
+  ]},
+  { id: 'greek', label: '그리스', symbols: [
+    { latex: '\\pi', display: 'π' }, { latex: '\\theta', display: 'θ' }, { latex: '\\alpha', display: 'α' }, { latex: '\\beta', display: 'β' },
+    { latex: '\\gamma', display: 'γ' }, { latex: '\\delta', display: 'δ' }, { latex: '\\sigma', display: 'σ' }, { latex: '\\omega', display: 'ω' },
+  ]},
+];
+
+/** Symbol definition */
+type MathSym = { latex: string; display: string; fields?: string[]; template?: string };
+
 function MathEditor({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const skipSync = useRef(false);
-  /** Inline math editing state */
-  const [editingMath, setEditingMath] = useState<{ node: HTMLElement | null; latex: string; isNew: boolean } | null>(null);
+  /** Active toolbar tab */
+  const [activeTab, setActiveTab] = useState('basic');
+  /** Structured input for multi-field symbols */
+  const [fieldInput, setFieldInput] = useState<{ sym: MathSym; vals: string[] } | null>(null);
 
-  /**
-   * Render value string to editor HTML.
-   *
-   * @param text raw value with $...$
-   * @return HTML string
-   */
+  /** Render value to HTML */
   const toHTML = (text: string): string => {
     if (!text) return '';
     return text
@@ -82,138 +108,160 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
       .replace(/\n/g, '<br>');
   };
 
-  /**
-   * Extract value string from editor DOM.
-   *
-   * @return raw value with $...$
-   */
+  /** Extract value from DOM */
   const fromDOM = (): string => {
     const el = editorRef.current;
     if (!el) return '';
     let result = '';
     const walk = (node: Node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        result += node.textContent ?? '';
-      } else if (node instanceof HTMLElement) {
-        if (node.dataset.math) {
-          result += `$${decodeURIComponent(node.dataset.math)}$`;
-        } else if (node.tagName === 'BR') {
-          result += '\n';
-        } else {
-          node.childNodes.forEach(walk);
-        }
+      if (node.nodeType === Node.TEXT_NODE) { result += node.textContent ?? ''; }
+      else if (node instanceof HTMLElement) {
+        if (node.dataset.math) result += `$${decodeURIComponent(node.dataset.math)}$`;
+        else if (node.tagName === 'BR') result += '\n';
+        else node.childNodes.forEach(walk);
       }
     };
     el.childNodes.forEach(walk);
     return result;
   };
 
-  /** Sync DOM from value on external changes */
+  /** Sync DOM from value */
   useEffect(() => {
     if (skipSync.current) { skipSync.current = false; return; }
-    if (!editorRef.current) return;
-    editorRef.current.innerHTML = toHTML(value) || '<br>';
+    if (editorRef.current) editorRef.current.innerHTML = toHTML(value) || '<br>';
   }, [value]);
 
-  /** Handle text input */
-  const handleInput = () => {
+  /** Handle input */
+  const handleInput = () => { skipSync.current = true; onChange(fromDOM()); };
+
+  /**
+   * Insert rendered math span at cursor.
+   *
+   * @param latex LaTeX string
+   * @return void
+   */
+  const insertMath = (latex: string) => {
+    const el = editorRef.current;
+    if (!el) return;
+
+    const span = document.createElement('span');
+    span.contentEditable = 'false';
+    span.dataset.math = encodeURIComponent(latex);
+    span.style.cssText = 'display:inline-block;vertical-align:middle;margin:0 2px;padding:2px 4px;border-radius:4px;background:rgba(232,230,223,0.3);cursor:pointer';
+    try { span.innerHTML = katex.renderToString(latex, { throwOnError: false }); }
+    catch { span.textContent = latex; }
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(span);
+      range.setStartAfter(span);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      el.appendChild(span);
+    }
+
     skipSync.current = true;
     onChange(fromDOM());
+    el.focus();
   };
 
-  /** Handle keydown for $ shortcut */
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === '$') {
-      e.preventDefault();
-      insertMathAtCursor();
+  /**
+   * Handle symbol button click.
+   *
+   * @param sym symbol definition
+   * @return void
+   */
+  const handleSymClick = (sym: MathSym) => {
+    if (sym.fields) {
+      setFieldInput({ sym, vals: new Array(sym.fields.length).fill('') });
+    } else {
+      insertMath(sym.latex);
     }
   };
 
-  /** Handle click on math spans */
+  /** Submit structured field input */
+  const submitFields = () => {
+    if (!fieldInput) return;
+    let latex = fieldInput.sym.template ?? fieldInput.sym.latex;
+    fieldInput.vals.forEach((v, i) => { latex = latex.replace(`%${i}`, v || '?'); });
+    insertMath(latex);
+    setFieldInput(null);
+  };
+
+  /** Click on existing math to re-edit (delete + re-insert) */
   const handleClick = (e: React.MouseEvent) => {
     const target = (e.target as HTMLElement).closest('[data-math]') as HTMLElement | null;
     if (!target?.dataset.math) return;
-    setEditingMath({ node: target, latex: decodeURIComponent(target.dataset.math), isNew: false });
-  };
-
-  /**
-   * Insert new math block at cursor position.
-   *
-   * @return void
-   */
-  const insertMathAtCursor = () => {
-    const el = editorRef.current;
-    if (!el) return;
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-
-    const placeholder = document.createElement('span');
-    placeholder.dataset.math = '';
-    placeholder.contentEditable = 'false';
-    placeholder.textContent = '⬚';
-    placeholder.style.cssText = 'display:inline-block;padding:2px 8px;border-radius:4px;background:#f0ede8;cursor:pointer;color:#888';
-
-    const range = sel.getRangeAt(0);
-    range.deleteContents();
-    range.insertNode(placeholder);
-    range.setStartAfter(placeholder);
-    range.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(range);
-
-    setEditingMath({ node: placeholder, latex: '', isNew: true });
-  };
-
-  /**
-   * Save edited math back to DOM.
-   *
-   * @return void
-   */
-  const saveMath = () => {
-    if (!editingMath || !editingMath.node) return;
-    const { node, latex } = editingMath;
-
-    if (!latex.trim()) {
-      node.remove();
-    } else {
-      node.dataset.math = encodeURIComponent(latex);
-      try {
-        node.innerHTML = katex.renderToString(latex, { throwOnError: false });
-        node.style.cssText = 'display:inline-block;vertical-align:middle;margin:0 2px;padding:2px 4px;border-radius:4px;background:rgba(232,230,223,0.3);cursor:pointer';
-      } catch {
-        node.textContent = latex;
-        node.style.cssText = 'cursor:pointer;color:#e53e3e';
-      }
-    }
-
-    setEditingMath(null);
+    const latex = decodeURIComponent(target.dataset.math);
+    target.remove();
     skipSync.current = true;
     onChange(fromDOM());
-    editorRef.current?.focus();
-  };
-
-  /** Delete math and close editor */
-  const deleteMath = () => {
-    if (!editingMath?.node) return;
-    editingMath.node.remove();
-    setEditingMath(null);
-    skipSync.current = true;
-    onChange(fromDOM());
-    editorRef.current?.focus();
+    /** Re-insert as editable - for now just put latex in clipboard-like flow */
+    insertMath(latex);
   };
 
   return (
     <div className={className}>
-      {/* toolbar */}
-      <div className="flex items-center gap-2 mb-2">
-        <button
-          onClick={insertMathAtCursor}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-mono text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer border border-grain"
-        >
-          <span className="text-[14px]">∑</span> 수식 삽입
-        </button>
-        <span className="text-[11px] text-ink-muted font-mono">또는 $ 키</span>
+      {/* tab bar */}
+      <div className="border border-grain rounded-t-lg bg-grain/10 flex">
+        {mathTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-[12px] font-medium transition-colors cursor-pointer ${
+              activeTab === tab.id ? 'bg-paper text-ink border-b-2 border-ink' : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
+
+      {/* symbol grid */}
+      <div className="border border-t-0 border-grain px-3 py-2 flex flex-wrap gap-1">
+        {mathTabs.find((t) => t.id === activeTab)?.symbols.map((sym) => (
+          <button
+            key={sym.latex}
+            onClick={() => handleSymClick(sym as MathSym)}
+            title={sym.latex}
+            className="w-10 h-10 flex items-center justify-center rounded-lg text-[16px] text-ink hover:bg-grain/50 transition-colors cursor-pointer border border-transparent hover:border-grain"
+          >
+            {sym.display}
+          </button>
+        ))}
+      </div>
+
+      {/* structured field input (fraction, sqrt, etc.) */}
+      {fieldInput && (
+        <div className="border border-t-0 border-grain px-3 py-3 bg-grain/5 flex items-center gap-2">
+          {fieldInput.sym.fields!.map((label, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <span className="text-[11px] text-ink-muted font-mono">{label}</span>
+              <input
+                type="text"
+                value={fieldInput.vals[i]}
+                onChange={(e) => { const v = [...fieldInput.vals]; v[i] = e.target.value; setFieldInput({ ...fieldInput, vals: v }); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitFields(); if (e.key === 'Escape') setFieldInput(null); }}
+                autoFocus={i === 0}
+                className="w-16 border border-grain rounded px-2 py-1 font-mono text-[13px] text-ink focus:outline-none focus:border-ink"
+              />
+            </div>
+          ))}
+          {/* live preview */}
+          {(() => {
+            let latex = fieldInput.sym.template ?? '';
+            fieldInput.vals.forEach((v, i) => { latex = latex.replace(`%${i}`, v || '?'); });
+            return <Latex text={`$${latex}$`} className="text-[16px] text-ink mx-2" />;
+          })()}
+          <button onClick={submitFields} className="h-7 px-3 rounded bg-ink text-paper text-[11px] font-medium cursor-pointer hover:bg-ink-soft transition-colors ml-auto">
+            삽입
+          </button>
+        </div>
+      )}
 
       {/* editor */}
       <div
@@ -221,42 +269,10 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
         contentEditable
         suppressContentEditableWarning
         onInput={handleInput}
-        onKeyDown={handleKeyDown}
         onClick={handleClick}
         data-placeholder="풀이과정을 입력하세요..."
-        className="w-full border border-grain rounded-lg px-4 py-3 text-[15px] text-ink leading-relaxed min-h-[120px] focus:outline-none focus:border-ink transition-colors [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-ink-muted"
+        className="border border-t-0 border-grain rounded-b-lg px-4 py-3 text-[15px] text-ink leading-relaxed min-h-[120px] focus:outline-none focus:border-ink transition-colors [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-ink-muted"
       />
-
-      {/* inline math editor */}
-      {editingMath && (
-        <div className="mt-2 border border-ink/20 rounded-lg p-4 bg-paper shadow-lg">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-[12px] font-mono text-ink-muted">수식 편집</span>
-            {editingMath.latex && (
-              <Latex text={`$${editingMath.latex}$`} className="text-[18px] text-ink" />
-            )}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={editingMath.latex}
-              onChange={(e) => setEditingMath({ ...editingMath, latex: e.target.value })}
-              onKeyDown={(e) => { if (e.key === 'Enter') saveMath(); if (e.key === 'Escape') { if (editingMath.isNew) deleteMath(); else setEditingMath(null); } }}
-              placeholder="LaTeX 입력 (예: \frac{1}{2})"
-              autoFocus
-              className="flex-1 border border-grain rounded-lg px-3 py-2 font-mono text-[14px] text-ink focus:outline-none focus:border-ink transition-colors"
-            />
-            <button onClick={saveMath} className="h-9 px-4 rounded-lg bg-ink text-paper text-[12px] font-medium cursor-pointer hover:bg-ink-soft transition-colors">
-              확인
-            </button>
-            {!editingMath.isNew && (
-              <button onClick={deleteMath} className="h-9 px-3 rounded-lg text-[12px] font-medium text-red-500 hover:bg-red-50 transition-colors cursor-pointer">
-                삭제
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
