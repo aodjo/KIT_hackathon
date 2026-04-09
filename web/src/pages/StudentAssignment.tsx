@@ -47,8 +47,18 @@ function Latex({ text, className }: { text: string; className?: string }) {
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+/** Math symbol item */
+type MathSymbolItem = {
+  display: string;
+  insert: string;
+  /** Structured input: fields to fill before inserting */
+  fields?: { label: string; placeholder: string; key: string }[];
+  /** Template with {key} placeholders */
+  template?: string;
+};
+
 /** Math symbol groups for equation editor */
-const mathSymbols = [
+const mathSymbols: { label: string; items: MathSymbolItem[] }[] = [
   { label: '기본', items: [
     { display: '÷', insert: '\\div ' },
     { display: '×', insert: '\\times ' },
@@ -59,10 +69,21 @@ const mathSymbols = [
     { display: '∞', insert: '\\infty ' },
   ]},
   { label: '분수·근호', items: [
-    { display: '⬚/⬚', insert: '\\frac{a}{b}' },
-    { display: '√', insert: '\\sqrt{x}' },
-    { display: 'xⁿ', insert: 'x^{n}' },
-    { display: 'x₋', insert: 'x_{i}' },
+    { display: '⬚/⬚', insert: '', template: '\\frac{{num}}{{den}}', fields: [
+      { label: '분자', placeholder: '1', key: 'num' },
+      { label: '분모', placeholder: '2', key: 'den' },
+    ]},
+    { display: '√', insert: '', template: '\\sqrt{{val}}', fields: [
+      { label: '값', placeholder: '2', key: 'val' },
+    ]},
+    { display: 'xⁿ', insert: '', template: '{base}^{{exp}}', fields: [
+      { label: '밑', placeholder: 'x', key: 'base' },
+      { label: '지수', placeholder: '2', key: 'exp' },
+    ]},
+    { display: 'x₋', insert: '', template: '{base}_{{sub}}', fields: [
+      { label: '변수', placeholder: 'a', key: 'base' },
+      { label: '아래첨자', placeholder: '1', key: 'sub' },
+    ]},
   ]},
   { label: '도형', items: [
     { display: '∠', insert: '\\angle ' },
@@ -94,6 +115,8 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
   /** Editing math block index */
   const [editingMath, setEditingMath] = useState<{ tex: string; idx: number } | null>(null);
   const mathInputRef = useRef<HTMLInputElement>(null);
+  /** Structured input popup */
+  const [structInput, setStructInput] = useState<{ sym: MathSymbolItem; vals: Record<string, string> } | null>(null);
 
   /**
    * Convert value to HTML with rendered math.
@@ -232,8 +255,8 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
             <div className="w-px h-4 bg-grain mx-1 first:hidden" />
             {group.items.map((sym) => (
               <button
-                key={sym.insert}
-                onClick={() => insertSymbol(sym.insert)}
+                key={sym.display}
+                onClick={() => sym.fields ? setStructInput({ sym, vals: {} }) : insertSymbol(sym.insert)}
                 title={`${group.label}: ${sym.display}`}
                 className="w-8 h-8 flex items-center justify-center rounded-md text-[15px] text-ink hover:bg-grain/50 transition-colors cursor-pointer font-mono"
               >
@@ -254,6 +277,62 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
         data-placeholder="풀이과정을 입력하세요..."
         className="w-full border border-grain rounded-lg px-4 py-3 text-[15px] text-ink leading-relaxed min-h-[100px] focus:outline-none focus:border-ink transition-colors empty:before:content-[attr(data-placeholder)] empty:before:text-ink-muted"
       />
+
+      {/* structured math input popup */}
+      {structInput && (
+        <div className="mt-2 border border-ink/20 rounded-lg p-4 bg-paper shadow-lg">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-[13px] font-medium text-ink">{structInput.sym.display}</span>
+            {/* live preview */}
+            {(() => {
+              let tex = structInput.sym.template ?? '';
+              structInput.sym.fields?.forEach((f) => {
+                tex = tex.replace(`{${f.key}}`, structInput.vals[f.key] || f.placeholder);
+              });
+              return <Latex text={`$${tex}$`} className="text-[18px] text-ink" />;
+            })()}
+          </div>
+          <div className="flex gap-2 items-end">
+            {structInput.sym.fields?.map((f) => (
+              <div key={f.key} className="flex-1">
+                <label className="text-[10px] font-mono text-ink-muted block mb-1">{f.label}</label>
+                <input
+                  type="text"
+                  value={structInput.vals[f.key] ?? ''}
+                  onChange={(e) => setStructInput({ ...structInput, vals: { ...structInput.vals, [f.key]: e.target.value } })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      let tex = structInput.sym.template ?? '';
+                      structInput.sym.fields?.forEach((ff) => {
+                        tex = tex.replace(`{${ff.key}}`, structInput.vals[ff.key] || ff.placeholder);
+                      });
+                      insertSymbol(tex);
+                      setStructInput(null);
+                    }
+                    if (e.key === 'Escape') setStructInput(null);
+                  }}
+                  placeholder={f.placeholder}
+                  autoFocus={f === structInput.sym.fields?.[0]}
+                  className="w-full border border-grain rounded-lg px-3 py-2 font-mono text-[14px] text-ink focus:outline-none focus:border-ink transition-colors"
+                />
+              </div>
+            ))}
+            <button
+              onClick={() => {
+                let tex = structInput.sym.template ?? '';
+                structInput.sym.fields?.forEach((f) => {
+                  tex = tex.replace(`{${f.key}}`, structInput.vals[f.key] || f.placeholder);
+                });
+                insertSymbol(tex);
+                setStructInput(null);
+              }}
+              className="h-9 px-4 rounded-lg bg-ink text-paper text-[12px] font-medium cursor-pointer hover:bg-ink-soft transition-colors shrink-0"
+            >
+              삽입
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* math edit popover */}
       {editingMath && (
