@@ -605,8 +605,16 @@ export default function StudentAssignment() {
   const [workDraw, setWorkDraw] = useState<Record<number, Stroke[]>>({});
   /** Current question index */
   const [currentIdx, setCurrentIdx] = useState(0);
-  /** Submission result */
-  const [result, setResult] = useState<{ correct: number; total: number } | null>(null);
+  /** Phase per question: answering or review */
+  const [phase, setPhase] = useState<'answering' | 'review'>('answering');
+  /** Per-question correctness keyed by question ID */
+  const [results, setResults] = useState<Record<number, boolean>>({});
+  /** AI discussion messages keyed by question ID */
+  const [chatMessages, setChatMessages] = useState<Record<number, { role: 'ai' | 'student'; content: string }[]>>({});
+  /** Chat input */
+  const [chatInput, setChatInput] = useState('');
+  /** Final submission result */
+  const [finalResult, setFinalResult] = useState<{ correct: number; total: number } | null>(null);
   /** Submitting state */
   const [submitting, setSubmitting] = useState(false);
 
@@ -641,12 +649,41 @@ export default function StudentAssignment() {
   };
 
   /**
-   * Go to next question.
+   * Submit current question answer and enter review phase.
+   *
+   * @return void
+   */
+  const submitCurrentQuestion = () => {
+    if (!q) return;
+    const myAnswer = answers[q.id]?.trim() ?? '';
+    let correctAnswer = q.answer;
+    try {
+      const parsed = JSON.parse(q.answer);
+      if (Array.isArray(parsed)) correctAnswer = parsed[0];
+    } catch { /* not JSON */ }
+    const isCorrect = myAnswer === correctAnswer.trim();
+    setResults((prev) => ({ ...prev, [q.id]: isCorrect }));
+
+    /** Initial AI message */
+    const aiMsg = isCorrect
+      ? `정답이에요! ${q.explanation ? '이 문제의 핵심을 설명해줄 수 있나요?' : '어떻게 풀었는지 설명해줄 수 있나요?'}`
+      : `아쉽네요. 정답은 ${correctAnswer}입니다. ${q.explanation || ''} 어디서 헷갈렸는지 같이 생각해볼까요?`;
+    setChatMessages((prev) => ({ ...prev, [q.id]: [{ role: 'ai', content: aiMsg }] }));
+    setChatInput('');
+    setPhase('review');
+  };
+
+  /**
+   * Go to next question from review phase.
    *
    * @return void
    */
   const goNext = () => {
-    if (currentIdx < questions.length - 1) setCurrentIdx(currentIdx + 1);
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx(currentIdx + 1);
+      setPhase('answering');
+      setChatInput('');
+    }
   };
 
   /**
@@ -655,7 +692,30 @@ export default function StudentAssignment() {
    * @return void
    */
   const goPrev = () => {
-    if (currentIdx > 0) setCurrentIdx(currentIdx - 1);
+    if (currentIdx > 0) {
+      setCurrentIdx(currentIdx - 1);
+      setPhase(results[questions[currentIdx - 1].id] !== undefined ? 'review' : 'answering');
+    }
+  };
+
+  /**
+   * Send chat message in review phase.
+   *
+   * @return void
+   */
+  const sendChat = () => {
+    if (!q || !chatInput.trim()) return;
+    const msgs = chatMessages[q.id] ?? [];
+    const newMsgs = [...msgs, { role: 'student' as const, content: chatInput.trim() }];
+
+    /** Simple AI response based on context */
+    const aiReply = msgs.length < 3
+      ? '좋은 생각이에요. 조금 더 자세히 설명해줄 수 있나요?'
+      : '잘 이해하고 있네요! 다음 문제로 넘어가볼까요?';
+    newMsgs.push({ role: 'ai', content: aiReply });
+
+    setChatMessages((prev) => ({ ...prev, [q.id]: newMsgs }));
+    setChatInput('');
   };
 
   /**
@@ -679,11 +739,11 @@ export default function StudentAssignment() {
   };
 
   /**
-   * Submit all answers.
+   * Submit all answers to server (final).
    *
    * @return void
    */
-  const handleSubmit = async () => {
+  const handleFinalSubmit = async () => {
     if (!user || submitting) return;
     setSubmitting(true);
     try {
@@ -699,7 +759,7 @@ export default function StudentAssignment() {
         }),
       });
       const data = await res.json();
-      setResult(data);
+      setFinalResult(data);
     } finally {
       setSubmitting(false);
     }
@@ -736,42 +796,49 @@ export default function StudentAssignment() {
             </p>
           </div>
           {/* question dots */}
-          {questions.length > 0 && !result && (
+          {questions.length > 0 && !finalResult && (
             <div className="flex flex-wrap gap-1.5 mt-4">
-              {questions.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentIdx(i)}
-                  className={`w-7 h-7 rounded-full text-[11px] font-mono font-medium transition-colors cursor-pointer ${
-                    i === currentIdx
-                      ? 'bg-ink text-paper'
-                      : answers[questions[i].id]?.trim()
-                        ? 'bg-ink/20 text-ink'
-                        : 'bg-grain/50 text-ink-muted'
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
+              {questions.map((qq, i) => {
+                const r = results[qq.id];
+                return (
+                  <button
+                    key={i}
+                    onClick={() => { setCurrentIdx(i); setPhase(r !== undefined ? 'review' : 'answering'); }}
+                    className={`w-7 h-7 rounded-full text-[11px] font-mono font-medium transition-colors cursor-pointer ${
+                      i === currentIdx
+                        ? 'bg-ink text-paper'
+                        : r === true
+                          ? 'bg-emerald-500 text-paper'
+                          : r === false
+                            ? 'bg-red-400 text-paper'
+                            : answers[qq.id]?.trim()
+                              ? 'bg-ink/20 text-ink'
+                              : 'bg-grain/50 text-ink-muted'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* result */}
-        {result ? (
+        {/* final result */}
+        {finalResult ? (
           <div className="flex-1 flex flex-col items-center justify-center">
             <div className={`rounded-2xl p-10 border text-center ${
-              result.correct === result.total
+              finalResult.correct === finalResult.total
                 ? 'bg-emerald-50 border-emerald-200'
                 : 'bg-paper border-grain'
             }`}>
               <p className="text-[48px] font-display text-ink mb-2">
-                {result.correct}/{result.total}
+                {finalResult.correct}/{finalResult.total}
               </p>
               <p className="text-[16px] text-ink-muted">
-                {result.correct === result.total
+                {finalResult.correct === finalResult.total
                   ? '모두 정답입니다!'
-                  : `${result.total}문제 중 ${result.correct}문제 정답`}
+                  : `${finalResult.total}문제 중 ${finalResult.correct}문제 정답`}
               </p>
             </div>
             <button
@@ -807,11 +874,17 @@ export default function StudentAssignment() {
                       return (
                         <button
                           key={k}
-                          onClick={() => setAnswer(k)}
-                          className={`w-full text-left px-5 py-3 rounded-lg border transition-colors cursor-pointer ${
-                            selected
-                              ? 'border-ink bg-ink/5'
-                              : 'border-grain hover:border-ink/30'
+                          onClick={() => phase === 'answering' && setAnswer(k)}
+                          className={`w-full text-left px-5 py-3 rounded-lg border transition-colors ${phase === 'answering' ? 'cursor-pointer' : ''} ${
+                            phase === 'review'
+                              ? k === (() => { try { return JSON.parse(q.answer)[0] ?? q.answer; } catch { return q.answer; } })()
+                                ? 'border-emerald-400 bg-emerald-50'
+                                : selected
+                                  ? 'border-red-400 bg-red-50'
+                                  : 'border-grain'
+                              : selected
+                                ? 'border-ink bg-ink/5'
+                                : 'border-grain hover:border-ink/30'
                           }`}
                         >
                           <span className="text-[14px] font-mono text-ink-muted mr-3">{'①②③④⑤'[Number(k) - 1] ?? k}</span>
@@ -825,11 +898,12 @@ export default function StudentAssignment() {
                 <input
                   type="text"
                   value={answers[q.id] ?? ''}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && currentAnswered) isLast ? handleSubmit() : goNext(); }}
+                  onChange={(e) => phase === 'answering' && setAnswer(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && currentAnswered && phase === 'answering') submitCurrentQuestion(); }}
                   placeholder="답을 입력하세요"
+                  disabled={phase === 'review'}
                   autoFocus
-                  className="w-full border border-grain rounded-lg px-5 py-3 font-mono text-[16px] text-ink focus:outline-none focus:border-ink transition-colors"
+                  className="w-full border border-grain rounded-lg px-5 py-3 font-mono text-[16px] text-ink focus:outline-none focus:border-ink transition-colors disabled:bg-grain/20"
                 />
               )}
 
@@ -891,6 +965,55 @@ export default function StudentAssignment() {
               </div>
             </div>
 
+            {/* review phase: result + AI discussion */}
+            {phase === 'review' && q && (
+              <div className="mt-6 border-t border-grain pt-6">
+                {/* result banner */}
+                <div className={`rounded-lg p-4 mb-4 ${results[q.id] ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
+                  <p className="text-[15px] font-medium text-ink">
+                    {results[q.id] ? '정답입니다!' : (() => {
+                      let ans = q.answer;
+                      try { const p = JSON.parse(ans); if (Array.isArray(p)) ans = p.join(', '); } catch {}
+                      return `오답입니다. 정답: ${ans}`;
+                    })()}
+                  </p>
+                </div>
+
+                {/* chat messages */}
+                <div className="space-y-4 mb-4 max-h-[300px] overflow-y-auto">
+                  {(chatMessages[q.id] ?? []).map((msg, i) => (
+                    <div key={i} className="flex flex-col gap-1">
+                      <span className={`text-[10px] uppercase tracking-[0.14em] font-mono font-medium ${msg.role === 'ai' ? 'text-clay-deep' : 'text-ink'}`}>
+                        {msg.role === 'ai' ? 'AI 튜터' : '나'}
+                      </span>
+                      <p className={`text-[15px] leading-relaxed ${msg.role === 'ai' ? 'text-ink-muted' : 'text-ink'}`}>
+                        {msg.content}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* chat input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') sendChat(); }}
+                    placeholder="질문하거나 풀이를 설명해보세요..."
+                    className="flex-1 border border-grain rounded-lg px-4 py-2.5 text-[14px] text-ink focus:outline-none focus:border-ink transition-colors"
+                  />
+                  <button
+                    onClick={sendChat}
+                    disabled={!chatInput.trim()}
+                    className="h-10 px-4 rounded-lg bg-ink text-paper text-[13px] font-medium cursor-pointer hover:bg-ink-soft transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    전송
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* navigation */}
             <div className="flex items-center justify-between mt-6">
               <button
@@ -900,20 +1023,28 @@ export default function StudentAssignment() {
               >
                 ← 이전
               </button>
-              {isLast ? (
+              {phase === 'answering' ? (
                 <button
-                  onClick={handleSubmit}
-                  disabled={submitting || answeredCount === 0}
+                  onClick={submitCurrentQuestion}
+                  disabled={!currentAnswered}
                   className="h-11 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  {submitting ? '제출 중...' : '제출하기'}
+                  제출
+                </button>
+              ) : isLast ? (
+                <button
+                  onClick={handleFinalSubmit}
+                  disabled={submitting}
+                  className="h-11 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {submitting ? '제출 중...' : '최종 제출'}
                 </button>
               ) : (
                 <button
                   onClick={goNext}
                   className="h-11 px-5 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer"
                 >
-                  다음 →
+                  다음 문제 →
                 </button>
               )}
             </div>
