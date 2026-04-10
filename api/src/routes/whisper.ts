@@ -1,6 +1,12 @@
 import { Hono } from 'hono';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Env } from '../db/types';
+import {
+  formatCurriculumConceptLabel,
+  getCurriculumConcept,
+  getCurriculumConceptLineage,
+  type CurriculumConcept,
+} from '../lib/curriculum';
 
 /** Whisper router - hidden question detection */
 const whisper = new Hono<{ Bindings: Env }>();
@@ -9,8 +15,13 @@ type InferRequest = {
   studentId: number;
   assignmentId: string;
   questionId: number;
+  conceptId?: string;
+  schoolLevel?: string;
+  grade?: string;
+  curriculumTopic?: string;
   questionText: string;
   questionAnswer: string;
+  questionExplanation?: string;
   studentAnswer: string;
   isCorrect: boolean;
   workText: string;
@@ -23,6 +34,7 @@ type InferRequest = {
 
 type HiddenQuestionAnalysis = {
   stuck_point: string;
+  missing_concept_ids: string[];
   missing_concepts: string[];
   recommended_practice: string;
   confidence: number;
@@ -47,7 +59,10 @@ const toStringArray = (value: unknown) => {
  * @param value parsed model response
  * @return normalized analysis or null
  */
-const normalizeAnalysis = (value: unknown): HiddenQuestionAnalysis | null => {
+const normalizeAnalysis = (
+  value: unknown,
+  candidateConcepts: CurriculumConcept[],
+): HiddenQuestionAnalysis | null => {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Record<string, unknown>;
   const stuckPoint = typeof candidate.stuck_point === 'string'
@@ -61,13 +76,31 @@ const normalizeAnalysis = (value: unknown): HiddenQuestionAnalysis | null => {
       ? candidate.recommendedPractice.trim()
       : '';
   const confidence = Number(candidate.confidence);
-  const missingConcepts = toStringArray(candidate.missing_concepts ?? candidate.missingConcepts);
+  const conceptCandidates = new Map(candidateConcepts.map((concept) => [concept.id, concept]));
+  const rawIds = toStringArray(candidate.missing_concept_ids ?? candidate.missingConceptIds);
+  const rawLabels = toStringArray(candidate.missing_concepts ?? candidate.missingConcepts);
+  const resolvedIds = Array.from(new Set(
+    [...rawIds, ...rawLabels]
+      .map((item) => {
+        if (conceptCandidates.has(item)) return item;
+        for (const concept of conceptCandidates.values()) {
+          if (item.includes(concept.id)) return concept.id;
+          if (concept.curriculum.some((curriculumItem) => item.includes(curriculumItem))) return concept.id;
+        }
+        return null;
+      })
+      .filter((item): item is string => item != null),
+  ));
 
   if (!stuckPoint) return null;
 
   return {
     stuck_point: stuckPoint,
-    missing_concepts: missingConcepts,
+    missing_concept_ids: resolvedIds,
+    missing_concepts: resolvedIds
+      .map((id) => conceptCandidates.get(id))
+      .filter((concept): concept is CurriculumConcept => concept != null)
+      .map((concept) => formatCurriculumConceptLabel(concept)),
     recommended_practice: recommendedPractice || '유사 문항에서 풀이 근거를 말로 설명하는 연습',
     confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.45,
   };
@@ -79,8 +112,8 @@ const normalizeAnalysis = (value: unknown): HiddenQuestionAnalysis | null => {
  * @param text raw model response text
  * @return parsed analysis or null
  */
-const extractAnalysisFromText = (text: string) => {
-  const direct = normalizeAnalysis(JSON.parse(text));
+const extractAnalysisFromText = (text: string, candidateConcepts: CurriculumConcept[]) => {
+  const direct = normalizeAnalysis(JSON.parse(text), candidateConcepts);
   if (direct) return direct;
   return null;
 };
@@ -91,15 +124,15 @@ const extractAnalysisFromText = (text: string) => {
  * @param text raw response text
  * @return parsed analysis or null
  */
-const parseAnalysisText = (text: string) => {
+const parseAnalysisText = (text: string, candidateConcepts: CurriculumConcept[]) => {
   try {
-    return extractAnalysisFromText(text);
+    return extractAnalysisFromText(text, candidateConcepts);
   } catch {
     const start = text.indexOf('{');
     const end = text.lastIndexOf('}');
     if (start < 0 || end <= start) return null;
     try {
-      return extractAnalysisFromText(text.slice(start, end + 1));
+      return extractAnalysisFromText(text.slice(start, end + 1), candidateConcepts);
     } catch {
       return null;
     }
@@ -142,6 +175,12 @@ const buildFallbackAnalysis = (body: InferRequest, signalDesc: string): HiddenQu
   const totalHesitationTime = body.signals.hesitations.reduce((sum, h) => sum + h.duration, 0);
   const conceptHints = inferConceptHints(`${body.questionText} ${body.questionAnswer} ${body.workText}`);
   const primaryConcept = conceptHints[0] ?? '핵심 개념 적용';
+  const conceptPath = getCurriculumConceptLineage(body.conceptId);
+  const currentConcept = getCurriculumConcept(body.conceptId);
+  const candidateMap = new Map(conceptPath.map((concept) => [concept.id, concept]));
+  const directRequirements = currentConcept?.requirements
+    .map((id) => candidateMap.get(id))
+    .filter((concept): concept is CurriculumConcept => concept != null) ?? [];
 
   let stuckPoint = `${primaryConcept}을(를) 적용하는 기준이 충분히 고정되지 않은 것으로 보입니다.`;
   if (!body.isCorrect) {
@@ -162,10 +201,19 @@ const buildFallbackAnalysis = (body: InferRequest, signalDesc: string): HiddenQu
       + body.signals.answerChanges * 0.09
       + (!body.isCorrect ? 0.18 : 0.05),
   );
+  const fallbackConcepts = Array.from(new Set([
+    ...(!body.isCorrect ? directRequirements.map((concept) => concept.id) : []),
+    ...(currentConcept ? [currentConcept.id] : []),
+  ])).slice(0, 3);
 
   return {
     stuck_point: stuckPoint,
-    missing_concepts: conceptHints.slice(0, 3),
+    missing_concept_ids: fallbackConcepts,
+    missing_concepts: fallbackConcepts
+      .map((id) => candidateMap.get(id))
+      .filter((concept): concept is CurriculumConcept => concept != null)
+      .map((concept) => formatCurriculumConceptLabel(concept))
+      .slice(0, 3),
     recommended_practice: recommendedPractice,
     confidence: Math.max(0.42, Math.min(0.9, 0.32 + signalWeight)),
   };
@@ -198,6 +246,13 @@ whisper.post('/infer', async (c) => {
     signals.hesitations.some((h) => h.after === 'drawing') ? '필기 도중 멈춤' : '',
     signals.hesitations.some((h) => h.after === 'typing') ? '수식 입력 도중 멈춤' : '',
   ].filter(Boolean).join(', ');
+  const conceptPath = getCurriculumConceptLineage(body.conceptId);
+  const currentConcept = getCurriculumConcept(body.conceptId);
+  const conceptPathText = conceptPath.length > 0
+    ? conceptPath.map((concept) =>
+      `- ${concept.id} | ${concept.schoolLevel} ${concept.grade} | ${concept.subject} | 내용: ${concept.curriculum.join(', ')} | 직접 선수: ${concept.requirements.join(', ') || '없음'}`,
+    ).join('\n')
+    : '- 후보 개념 정보를 찾지 못함';
 
   const fallbackAnalysis = buildFallbackAnalysis(body, signalDesc);
   let analysis = fallbackAnalysis;
@@ -213,17 +268,19 @@ whisper.post('/infer', async (c) => {
         system: `너는 수학 교육 전문가이다.
 학생이 문제를 푸는 과정에서 보인 행동 신호와 풀이를 분석하여:
 1. 어디서 막혔는지 (stuck_point)
-2. 어떤 개념이 부족한지 (missing_concepts)
+2. 어떤 개념이 부족한지 (missing_concept_ids)
 3. 어떤 유형의 연습이 필요한지 (recommended_practice)
 를 분석해라.
 
 규칙:
 - 교사가 읽을 수 있도록 간결하게 작성
-- missing_concepts는 구체적인 수학 개념명 배열
+- missing_concept_ids는 반드시 아래 candidate_concepts에 있는 id만 사용
+- missing_concept_ids는 1~3개만 선택
+- 현재 문제 단원과 선수 개념 중에서 학생이 실제로 비어 있는 개념을 고르고, 현재 단원만 흔들리면 현재 concept id를 포함
 - JSON으로만 응답:
 {
   "stuck_point": "학생이 막힌 지점 설명",
-  "missing_concepts": ["개념1", "개념2"],
+  "missing_concept_ids": ["개념ID1", "개념ID2"],
   "recommended_practice": "추천 연습 유형",
   "confidence": 0.0
 }`,
@@ -231,9 +288,14 @@ whisper.post('/infer', async (c) => {
           role: 'user',
           content: `문제: ${body.questionText}
 정답: ${body.questionAnswer}
+문항 해설: ${body.questionExplanation ?? '(해설 없음)'}
 학생 답: ${body.studentAnswer}
 정답 여부: ${body.isCorrect ? '정답' : '오답'}
 ${body.workText ? `풀이 과정: ${body.workText}` : '(풀이 없음)'}
+현재 문제 개념: ${currentConcept ? formatCurriculumConceptLabel(currentConcept) : `${body.conceptId ?? '알 수 없음'} · ${body.schoolLevel ?? ''} ${body.grade ?? ''} · ${body.curriculumTopic ?? ''}`.trim()}
+
+candidate_concepts:
+${conceptPathText}
 
 행동 신호: ${signalDesc}`,
         }],
@@ -243,11 +305,12 @@ ${body.workText ? `풀이 과정: ${body.workText}` : '(풀이 없음)'}
         .filter((item) => item.type === 'text')
         .map((item) => item.text)
         .join('\n');
-      const parsed = parseAnalysisText(text);
+      const parsed = parseAnalysisText(text, conceptPath);
 
       if (parsed) {
         analysis = {
           stuck_point: parsed.stuck_point || fallbackAnalysis.stuck_point,
+          missing_concept_ids: parsed.missing_concept_ids.length > 0 ? parsed.missing_concept_ids : fallbackAnalysis.missing_concept_ids,
           missing_concepts: parsed.missing_concepts.length > 0 ? parsed.missing_concepts : fallbackAnalysis.missing_concepts,
           recommended_practice: parsed.recommended_practice || fallbackAnalysis.recommended_practice,
           confidence: Math.max(parsed.confidence, fallbackAnalysis.confidence - 0.08),
@@ -276,13 +339,17 @@ ${body.workText ? `풀이 과정: ${body.workText}` : '(풀이 없음)'}
        VALUES (?, 'stuck_analysis', ?)`,
     ).bind(
       body.studentId,
-      JSON.stringify({
-        assignment_id: body.assignmentId,
-        question_id: body.questionId,
-        stuck_point: analysis.stuck_point,
-        missing_concepts: analysis.missing_concepts,
-        recommended_practice: analysis.recommended_practice,
-        confidence: analysis.confidence,
+        JSON.stringify({
+          assignment_id: body.assignmentId,
+          question_id: body.questionId,
+          concept_id: body.conceptId ?? null,
+          current_concept: currentConcept,
+          candidate_concepts: conceptPath,
+          stuck_point: analysis.stuck_point,
+          missing_concept_ids: analysis.missing_concept_ids,
+          missing_concepts: analysis.missing_concepts,
+          recommended_practice: analysis.recommended_practice,
+          confidence: analysis.confidence,
         source,
         signals: body.signals,
       }),
@@ -318,6 +385,7 @@ whisper.get('/assignment/:assignmentId', async (c) => {
       studentName: r.student_name,
       questionId: ctx.question_id,
       stuckPoint: ctx.stuck_point,
+      missingConceptIds: ctx.missing_concept_ids ?? [],
       missingConcepts: ctx.missing_concepts,
       recommendedPractice: ctx.recommended_practice,
       confidence: ctx.confidence,

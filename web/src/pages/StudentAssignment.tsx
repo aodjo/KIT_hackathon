@@ -11,6 +11,7 @@ const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
 /** Question record */
 type Question = {
   id: number;
+  concept_id: string;
   school_level: string;
   grade: string;
   curriculum_topic: string;
@@ -922,8 +923,13 @@ export default function StudentAssignment() {
         studentId: user.id,
         assignmentId: id,
         questionId: question.id,
+        conceptId: question.concept_id,
+        schoolLevel: question.school_level,
+        grade: question.grade,
+        curriculumTopic: question.curriculum_topic,
         questionText: question.question,
         questionAnswer: getCorrectAnswer(question),
+        questionExplanation: question.explanation,
         studentAnswer,
         isCorrect,
         workText: workText[question.id] ?? '',
