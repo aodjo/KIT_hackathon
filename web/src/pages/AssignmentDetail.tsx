@@ -187,7 +187,7 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
     typeof window === 'undefined' ? true : window.matchMedia('(min-width: 640px)').matches,
   );
   const [dragging, setDragging] = useState(false);
-  const [view, setView] = useState({ scale: 0.84, x: 0, y: 0 });
+  const [view, setView] = useState({ scale: 0.83, x: 0, y: 0 });
 
   const MIN_SCALE = 0.55;
   const MAX_SCALE = 2.1;
@@ -269,7 +269,7 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
     const nextScale = clampScale(Math.min(
       (viewport.clientWidth - padding) / sceneWidth,
       (viewport.clientHeight - padding) / sceneHeight,
-      0.84,
+      0.83,
     ));
     setView({
       scale: nextScale,
@@ -313,6 +313,14 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
       viewport.clientWidth / 2,
       viewport.clientHeight / 2,
     );
+  };
+
+  const isCanvasControlTarget = (target: EventTarget | null) =>
+    target instanceof HTMLElement && Boolean(target.closest('[data-canvas-control="true"]'));
+
+  const stopCanvasControlEvent = (event: React.SyntheticEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
   };
 
   /** Sync layout mode with the active breakpoint. */
@@ -546,38 +554,7 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
   });
 
   return (
-    <div className="mt-1 rounded-2xl border border-grain bg-[linear-gradient(180deg,rgba(232,230,223,0.28),rgba(255,255,255,0.92))] p-3 sm:p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-clay-deep">
-          드래그로 이동, 휠 또는 버튼으로 확대/축소
-        </p>
-        <div className="flex items-center gap-1.5">
-          <span className="hidden sm:inline text-[10px] font-mono uppercase tracking-[0.14em] text-ink-muted">
-            {zoomLabel}
-          </span>
-          <button
-            type="button"
-            onClick={() => zoomBy(1 / 1.15)}
-            className="h-8 w-8 cursor-pointer rounded-full border border-grain bg-paper text-[16px] text-ink transition-colors hover:border-ink"
-          >
-            -
-          </button>
-          <button
-            type="button"
-            onClick={fitView}
-            className="h-8 cursor-pointer rounded-full border border-grain bg-paper px-3 text-[11px] font-mono text-ink transition-colors hover:border-ink"
-          >
-            {Math.round(view.scale * 100)}%
-          </button>
-          <button
-            type="button"
-            onClick={() => zoomBy(1.15)}
-            className="h-8 w-8 cursor-pointer rounded-full border border-grain bg-paper text-[16px] text-ink transition-colors hover:border-ink"
-          >
-            +
-          </button>
-        </div>
-      </div>
+    <div className="mt-1">
       <div
         ref={viewportRef}
         className={`relative overflow-hidden rounded-2xl border border-grain bg-[radial-gradient(circle_at_top,rgba(244,240,232,0.9),rgba(255,255,255,0.95))] touch-none select-none ${
@@ -586,12 +563,14 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
         style={{ height: viewportHeight }}
         onDoubleClick={fitView}
         onWheel={(e) => {
+          if (isCanvasControlTarget(e.target)) return;
           e.preventDefault();
           const rect = e.currentTarget.getBoundingClientRect();
           const factor = e.deltaY > 0 ? 1 / 1.08 : 1.08;
           zoomAt(view.scale * factor, e.clientX - rect.left, e.clientY - rect.top);
         }}
         onPointerDown={(e) => {
+          if (isCanvasControlTarget(e.target)) return;
           dragState.current = {
             pointerId: e.pointerId,
             startX: e.clientX,
@@ -628,6 +607,38 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
           setDragging(false);
         }}
       >
+        <div
+          data-canvas-control="true"
+          className="absolute right-3 top-3 z-10 flex items-center gap-1.5"
+          onClick={stopCanvasControlEvent}
+          onPointerDown={stopCanvasControlEvent}
+          onWheel={stopCanvasControlEvent}
+        >
+          <button
+            type="button"
+            onClick={() => zoomBy(1 / 1.15)}
+            className="h-8 w-8 cursor-pointer rounded-full border border-grain bg-paper text-[16px] text-ink transition-colors hover:border-ink"
+            aria-label="축소"
+          >
+            -
+          </button>
+          <button
+            type="button"
+            onClick={fitView}
+            className="h-8 cursor-pointer rounded-full border border-grain bg-paper px-3 text-[11px] font-mono text-ink transition-colors hover:border-ink"
+            aria-label={`${zoomLabel} 보기로 맞추기`}
+          >
+            {Math.round(view.scale * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={() => zoomBy(1.15)}
+            className="h-8 w-8 cursor-pointer rounded-full border border-grain bg-paper text-[16px] text-ink transition-colors hover:border-ink"
+            aria-label="확대"
+          >
+            +
+          </button>
+        </div>
         <div
           className="absolute left-0 top-0 will-change-transform"
           style={{
