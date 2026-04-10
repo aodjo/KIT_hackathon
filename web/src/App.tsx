@@ -167,6 +167,23 @@ function RootPage() {
  *
  * @return root element
  */
+/**
+ * 404 page.
+ *
+ * @return not found element
+ */
+function NotFound() {
+  return (
+    <div className="min-h-screen font-display bg-paper-grain flex flex-col items-center justify-center">
+      <p className="text-[64px] font-display text-ink mb-2">404</p>
+      <p className="text-[16px] text-ink-muted mb-6">페이지를 찾을 수 없습니다.</p>
+      <a href="/" className="h-10 px-5 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors flex items-center">
+        홈으로 돌아가기
+      </a>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <>
@@ -180,6 +197,7 @@ export default function App() {
         <Route path="/articles" element={<Articles />} />
         <Route path="/articles/date/:date" element={<Articles />} />
         <Route path="/articles/:slug" element={<Article />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </>
   );
