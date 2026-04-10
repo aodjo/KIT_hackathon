@@ -27,9 +27,26 @@ import {
  * @param props.student student component
  * @return role-appropriate element
  */
+/**
+ * 403 page.
+ *
+ * @return forbidden element
+ */
+function Forbidden() {
+  return (
+    <div className="min-h-screen font-display bg-paper-grain flex flex-col items-center justify-center">
+      <p className="text-[64px] font-display text-ink mb-2">403</p>
+      <p className="text-[16px] text-ink-muted mb-6">접근 권한이 없습니다.</p>
+      <a href="/" className="h-10 px-5 rounded-full bg-ink text-paper font-medium text-[13px] hover:bg-ink-soft transition-colors flex items-center">
+        홈으로 돌아가기
+      </a>
+    </div>
+  );
+}
+
 function RoleRoute({ teacher, student }: { teacher: JSX.Element; student: JSX.Element }) {
   const user = getStoredUser();
-  if (!user) return null;
+  if (!user) return <Forbidden />;
   return user.role === 'teacher' ? teacher : student;
 }
 
@@ -193,7 +210,7 @@ export default function App() {
         <Route path="/c/:classId" element={<RoleRoute teacher={<Dashboard />} student={<StudentDashboard />} />} />
         <Route path="/c/:classId/a/:id" element={<RoleRoute teacher={<AssignmentDetail />} student={<StudentAssignment />} />} />
         <Route path="/profile" element={<Profile />} />
-        <Route path="/workbook/:id" element={<WorkbookEditor />} />
+        <Route path="/workbook/:id" element={(() => { const u = getStoredUser(); if (!u) return <Forbidden />; if (u.role !== 'teacher') return <Forbidden />; return <WorkbookEditor />; })()} />
         <Route path="/articles" element={<Articles />} />
         <Route path="/articles/date/:date" element={<Articles />} />
         <Route path="/articles/:slug" element={<Article />} />
