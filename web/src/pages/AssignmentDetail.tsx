@@ -733,8 +733,6 @@ export default function AssignmentDetail() {
 
   /** Assignment data */
   const [assignment, setAssignment] = useState<Assignment | null>(null);
-  /** Other assignments in the same class for workbook switching */
-  const [classAssignments, setClassAssignments] = useState<Assignment[]>([]);
   /** Questions for workbook-based assignment */
   const [questions, setQuestions] = useState<Question[]>([]);
   /** Student submissions */
@@ -748,21 +746,12 @@ export default function AssignmentDetail() {
   /** Selected student filter for analysis cards */
   const [selectedStudent, setSelectedStudent] = useState('all');
 
-  const assignmentOptions = classAssignments.length > 0
-    ? classAssignments.filter((item) => item.workbook_id || item.id === Number(id))
-    : assignment
-      ? [assignment]
-      : [];
   const studentOptions = Array.from(new Set(analyses.map((analysis) => analysis.studentName)))
     .sort((left, right) => left.localeCompare(right, 'ko-KR'));
   const filteredAnalyses = selectedStudent === 'all'
     ? analyses
     : analyses.filter((analysis) => analysis.studentName === selectedStudent);
   const showAnalysisSidebar = tab === 'analysis';
-  const assignmentDropdownOptions: SidebarDropdownOption[] = assignmentOptions.map((option) => ({
-    value: String(option.id),
-    label: option.title,
-  }));
   const studentDropdownOptions: SidebarDropdownOption[] = [
     { value: 'all', label: '전체 학생' },
     ...studentOptions.map((studentName) => ({
@@ -781,15 +770,6 @@ export default function AssignmentDetail() {
         setSubmissions(d.submissions ?? []);
       });
   }, [id]);
-
-  /** Fetch assignments in the same class for the workbook dropdown */
-  useEffect(() => {
-    if (!classId) return;
-    fetch(`${API}/api/assignments/class/${classId}`)
-      .then((r) => r.json())
-      .then((d) => setClassAssignments(d.assignments ?? []))
-      .catch(() => {});
-  }, [classId]);
 
   /** Fetch questions if workbook-based */
   useEffect(() => {
@@ -1047,22 +1027,13 @@ export default function AssignmentDetail() {
               <div className="xl:sticky xl:top-8 space-y-3">
                 <div className="rounded-2xl border border-grain bg-paper p-5">
                   <p className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">
-                    분석 필터
+                    학생 필터
                   </p>
                   <p className="mt-2 text-[14px] text-ink">
-                    문제집과 학생 기준으로 학습 분석을 좁혀서 비교할 수 있습니다.
+                    현재 과제 안에서 학생별 학습 분석을 좁혀서 비교할 수 있습니다.
                   </p>
                 </div>
-                <div className="rounded-2xl border border-grain bg-paper p-5 space-y-4">
-                  <SidebarDropdown
-                    label="문제집"
-                    value={String(id ?? '')}
-                    options={assignmentDropdownOptions}
-                    onChange={(nextValue) => {
-                      if (nextValue === String(id)) return;
-                      navigate(`/c/${classId}/a/${nextValue}`);
-                    }}
-                  />
+                <div className="rounded-2xl border border-grain bg-paper p-5">
                   <SidebarDropdown
                     label="학생"
                     value={selectedStudent}
@@ -1075,7 +1046,6 @@ export default function AssignmentDetail() {
                     현재 보기
                   </p>
                   <div className="mt-3 space-y-2 text-[13px] text-ink-muted">
-                    <p>문제집: <span className="text-ink">{assignment.title}</span></p>
                     <p>학생: <span className="text-ink">{selectedStudent === 'all' ? '전체 학생' : selectedStudent}</span></p>
                   </div>
                   <p className="mt-4 text-[12px] font-mono text-ink-muted">
