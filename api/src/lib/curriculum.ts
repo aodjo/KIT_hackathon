@@ -88,9 +88,27 @@ function formatCurriculumConceptLabel(concept: Pick<CurriculumConcept, 'id' | 's
   return `${concept.id} · ${concept.schoolLevel} ${concept.grade} · ${concept.curriculum.join(', ')}`;
 }
 
+/**
+ * Build a normalized curriculum payload for API responses.
+ *
+ * @param conceptId target concept ID
+ * @return current concept and lineage snapshot
+ */
+function getCurriculumSnapshot(conceptId?: string | null) {
+  const concept = getCurriculumConcept(conceptId);
+  const lineage = getCurriculumConceptLineage(conceptId);
+
+  return {
+    concept,
+    lineage,
+    labels: lineage.map((item) => formatCurriculumConceptLabel(item)),
+  };
+}
+
 export type { CurriculumConcept };
 export {
   formatCurriculumConceptLabel,
   getCurriculumConcept,
   getCurriculumConceptLineage,
+  getCurriculumSnapshot,
 };
