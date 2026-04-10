@@ -63,16 +63,16 @@ const mathTabs = [
     { latex: '\\leq', display: '≤' }, { latex: '\\geq', display: '≥' }, { latex: '\\pm', display: '±' }, { latex: '\\infty', display: '∞' },
   ]},
   { id: 'frac', label: '분수·지수', symbols: [
-    { latex: '\\frac{□}{□}', display: '⬚/⬚', fields: ['분자', '분모'], template: '\\frac{%0}{%1}' },
-    { latex: '\\sqrt{□}', display: '√⬚', fields: ['값'], template: '\\sqrt{%0}' },
-    { latex: '^{□}', display: 'xⁿ', fields: ['밑', '지수'], template: '%0^{%1}' },
-    { latex: '_{□}', display: 'x₋', fields: ['변수', '첨자'], template: '%0_{%1}' },
+    { latex: '\\frac{}{}', display: '⬚/⬚', struct: 'frac' },
+    { latex: '\\sqrt{}', display: '√⬚', struct: 'sqrt' },
+    { latex: 'x^{}', display: 'xⁿ', struct: 'sup' },
+    { latex: 'x_{}', display: 'x₋', struct: 'sub' },
     { latex: '\\log', display: 'log' }, { latex: '\\ln', display: 'ln' },
   ]},
   { id: 'geo', label: '도형', symbols: [
     { latex: '\\angle', display: '∠' }, { latex: '\\triangle', display: '△' }, { latex: '\\square', display: '□' },
     { latex: '\\parallel', display: '∥' }, { latex: '\\perp', display: '⊥' }, { latex: '^\\circ', display: '°' },
-    { latex: '\\overline{□}', display: 'AB̅', fields: ['문자'], template: '\\overline{%0}' },
+    { latex: '\\overline{}', display: 'AB̅', struct: 'overline' },
     { latex: '\\text{cm}^2', display: 'cm²' }, { latex: '\\text{cm}', display: 'cm' },
   ]},
   { id: 'greek', label: '그리스', symbols: [
@@ -82,28 +82,50 @@ const mathTabs = [
 ];
 
 /** Symbol definition */
-type MathSym = { latex: string; display: string; fields?: string[]; template?: string };
+type MathSym = { latex: string; display: string; struct?: string };
+
+/**
+ * Extract LaTeX from a math structure element.
+ *
+ * @param el structure element
+ * @return LaTeX string
+ */
+function structToLatex(el: HTMLElement): string {
+  const type = el.dataset.mathType;
+  const slots = Array.from(el.querySelectorAll('[data-slot]')).map(s => s.textContent?.trim() || '');
+  if (type === 'frac') return `\\frac{${slots[0]}}{${slots[1]}}`;
+  if (type === 'sqrt') return `\\sqrt{${slots[0]}}`;
+  if (type === 'sup') return `${slots[0]}^{${slots[1]}}`;
+  if (type === 'sub') return `${slots[0]}_{${slots[1]}}`;
+  if (type === 'overline') return `\\overline{${slots[0]}}`;
+  return '';
+}
+
+/** CSS for editable slot */
+const slotCss = 'min-width:14px;padding:0 3px;outline:none;text-align:center;display:inline-block;';
 
 function MathEditor({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const skipSync = useRef(false);
-  /** Active toolbar tab */
   const [activeTab, setActiveTab] = useState('basic');
-  /** Structured input for multi-field symbols */
-  const [fieldInput, setFieldInput] = useState<{ sym: MathSym; vals: string[] } | null>(null);
 
-  /** Render value to HTML */
+  /** Render value to HTML (structs stay editable, not KaTeX) */
   const toHTML = (text: string): string => {
     if (!text) return '';
     return text
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\$\\frac\{([^}]*)\}\{([^}]*)\}\$/g, (_,a,b) =>
+        `<span data-math-type="frac" contenteditable="false" style="display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin:0 3px;"><span data-slot contenteditable="true" style="${slotCss}border-bottom:1.5px solid #333;">${a}</span><span data-slot contenteditable="true" style="${slotCss}">${b}</span></span>`)
+      .replace(/\$\\sqrt\{([^}]*)\}\$/g, (_,a) =>
+        `<span data-math-type="sqrt" contenteditable="false" style="display:inline-flex;align-items:center;vertical-align:middle;margin:0 2px;"><span style="font-size:18px">√</span><span data-slot contenteditable="true" style="${slotCss}border-top:1.5px solid #333;">${a}</span></span>`)
+      .replace(/\$([^${}]+)\^?\{([^}]*)\}\$/g, (_,a,b) => {
+        if (_.includes('^')) return `<span data-math-type="sup" contenteditable="false" style="display:inline-flex;align-items:flex-start;vertical-align:middle;margin:0 1px;"><span data-slot contenteditable="true" style="${slotCss}">${a.replace('$','')}</span><span data-slot contenteditable="true" style="${slotCss}font-size:11px;margin-top:-4px;">${b}</span></span>`;
+        return _;
+      })
       .replace(/\$([^$]+)\$/g, (_, tex: string) => {
         try {
-          const rendered = katex.renderToString(tex, { throwOnError: false });
-          return `<span contenteditable="false" data-math="${encodeURIComponent(tex)}" style="display:inline-block;vertical-align:middle;margin:0 2px;padding:2px 4px;border-radius:4px;background:rgba(232,230,223,0.3);cursor:pointer">${rendered}</span>`;
-        } catch {
-          return `<code contenteditable="false" data-math="${encodeURIComponent(tex)}" style="cursor:pointer;color:#e53e3e">${tex}</code>`;
-        }
+          return `<span contenteditable="false" data-math="${encodeURIComponent(tex)}" style="display:inline-block;vertical-align:middle;margin:0 2px;padding:2px 4px;border-radius:4px;background:rgba(232,230,223,0.3)">${katex.renderToString(tex, { throwOnError: false })}</span>`;
+        } catch { return tex; }
       })
       .replace(/\n/g, '<br>');
   };
@@ -112,164 +134,138 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
   const fromDOM = (): string => {
     const el = editorRef.current;
     if (!el) return '';
-    let result = '';
-    const walk = (node: Node) => {
-      if (node.nodeType === Node.TEXT_NODE) { result += node.textContent ?? ''; }
-      else if (node instanceof HTMLElement) {
-        if (node.dataset.math) result += `$${decodeURIComponent(node.dataset.math)}$`;
-        else if (node.tagName === 'BR') result += '\n';
-        else node.childNodes.forEach(walk);
+    let r = '';
+    const walk = (n: Node) => {
+      if (n.nodeType === Node.TEXT_NODE) r += n.textContent ?? '';
+      else if (n instanceof HTMLElement) {
+        if (n.dataset.mathType) r += `$${structToLatex(n)}$`;
+        else if (n.dataset.math) r += `$${decodeURIComponent(n.dataset.math)}$`;
+        else if (n.tagName === 'BR') r += '\n';
+        else n.childNodes.forEach(walk);
       }
     };
     el.childNodes.forEach(walk);
-    return result;
+    return r;
   };
 
-  /** Sync DOM from value */
   useEffect(() => {
     if (skipSync.current) { skipSync.current = false; return; }
     if (editorRef.current) editorRef.current.innerHTML = toHTML(value) || '<br>';
   }, [value]);
 
-  /** Handle input */
-  const handleInput = () => { skipSync.current = true; onChange(fromDOM()); };
+  const sync = () => { skipSync.current = true; onChange(fromDOM()); };
 
-  /**
-   * Insert rendered math span at cursor.
-   *
-   * @param latex LaTeX string
-   * @return void
-   */
-  const insertMath = (latex: string) => {
+  /** Insert node at cursor */
+  const ins = (node: Node) => {
     const el = editorRef.current;
     if (!el) return;
-
-    const span = document.createElement('span');
-    span.contentEditable = 'false';
-    span.dataset.math = encodeURIComponent(latex);
-    span.style.cssText = 'display:inline-block;vertical-align:middle;margin:0 2px;padding:2px 4px;border-radius:4px;background:rgba(232,230,223,0.3);cursor:pointer';
-    try { span.innerHTML = katex.renderToString(latex, { throwOnError: false }); }
-    catch { span.textContent = latex; }
-
+    el.focus();
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
       const range = sel.getRangeAt(0);
       range.deleteContents();
-      range.insertNode(span);
-      range.setStartAfter(span);
+      range.insertNode(node);
+      range.setStartAfter(node);
       range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else {
-      el.appendChild(span);
-    }
-
-    skipSync.current = true;
-    onChange(fromDOM());
-    el.focus();
+    } else el.appendChild(node);
   };
 
-  /**
-   * Handle symbol button click.
-   *
-   * @param sym symbol definition
-   * @return void
-   */
+  /** Build and insert always-editable struct */
+  const insertStruct = (type: string) => {
+    const w = document.createElement('span');
+    w.dataset.mathType = type;
+    w.contentEditable = 'false';
+    const slot = (ph: string, extra = '') => {
+      const s = document.createElement('span');
+      s.dataset.slot = 'true';
+      s.contentEditable = 'true';
+      s.style.cssText = slotCss + extra;
+      s.textContent = '';
+      s.setAttribute('placeholder', ph);
+      return s;
+    };
+    if (type === 'frac') {
+      w.style.cssText = 'display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin:0 3px;';
+      w.appendChild(slot('⬚', 'border-bottom:1.5px solid #333;'));
+      w.appendChild(slot('⬚'));
+    } else if (type === 'sqrt') {
+      w.style.cssText = 'display:inline-block;vertical-align:middle;margin:0 2px;border-top:1.5px solid #333;padding-left:2px;padding-right:3px;';
+      w.innerHTML = '√';
+      w.style.fontStyle = 'normal';
+      const inner = slot('⬚');
+      inner.style.cssText = slotCss;
+      w.textContent = '';
+      w.insertAdjacentText('afterbegin', '√');
+      w.appendChild(inner);
+    } else if (type === 'sup') {
+      w.style.cssText = 'display:inline-flex;align-items:flex-start;vertical-align:middle;margin:0 1px;';
+      w.appendChild(slot('x'));
+      w.appendChild(slot('n', 'font-size:11px;margin-top:-4px;'));
+    } else if (type === 'sub') {
+      w.style.cssText = 'display:inline-flex;align-items:flex-end;vertical-align:middle;margin:0 1px;';
+      w.appendChild(slot('x'));
+      w.appendChild(slot('i', 'font-size:11px;margin-bottom:-2px;'));
+    } else if (type === 'overline') {
+      w.style.cssText = 'display:inline-flex;vertical-align:middle;margin:0 2px;';
+      w.appendChild(slot('AB', 'border-top:1.5px solid #333;'));
+    }
+    ins(w);
+    const first = w.querySelector('[data-slot]') as HTMLElement;
+    if (first) requestAnimationFrame(() => first.focus());
+    sync();
+  };
+
+  /** Insert simple rendered symbol */
+  const insertSimple = (latex: string) => {
+    const span = document.createElement('span');
+    span.contentEditable = 'false';
+    span.dataset.math = encodeURIComponent(latex);
+    span.style.cssText = 'display:inline-block;vertical-align:middle;margin:0 2px;padding:2px 4px;border-radius:4px;background:rgba(232,230,223,0.3)';
+    try { span.innerHTML = katex.renderToString(latex, { throwOnError: false }); } catch { span.textContent = latex; }
+    ins(span);
+    sync();
+    editorRef.current?.focus();
+  };
+
   const handleSymClick = (sym: MathSym) => {
-    if (sym.fields) {
-      setFieldInput({ sym, vals: new Array(sym.fields.length).fill('') });
-    } else {
-      insertMath(sym.latex);
+    if (sym.struct) insertStruct(sym.struct);
+    else insertSimple(sym.latex);
+  };
+
+  /** Tab key navigates between slots */
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Tab') {
+      const active = document.activeElement as HTMLElement;
+      if (!active?.dataset.slot) return;
+      const struct = active.closest('[data-math-type]');
+      if (!struct) return;
+      const slots = struct.querySelectorAll('[data-slot]');
+      const idx = Array.from(slots).indexOf(active);
+      const next = slots[idx + (e.shiftKey ? -1 : 1)] as HTMLElement;
+      if (next) { e.preventDefault(); next.focus(); }
     }
-  };
-
-  /** Submit structured field input */
-  const submitFields = () => {
-    if (!fieldInput) return;
-    let latex = fieldInput.sym.template ?? fieldInput.sym.latex;
-    fieldInput.vals.forEach((v, i) => { latex = latex.replace(`%${i}`, v || '?'); });
-    insertMath(latex);
-    setFieldInput(null);
-  };
-
-  /** Click on existing math to re-edit (delete + re-insert) */
-  const handleClick = (e: React.MouseEvent) => {
-    const target = (e.target as HTMLElement).closest('[data-math]') as HTMLElement | null;
-    if (!target?.dataset.math) return;
-    const latex = decodeURIComponent(target.dataset.math);
-    target.remove();
-    skipSync.current = true;
-    onChange(fromDOM());
-    /** Re-insert as editable - for now just put latex in clipboard-like flow */
-    insertMath(latex);
   };
 
   return (
     <div className={className}>
-      {/* tab bar */}
       <div className="border border-grain rounded-t-lg bg-grain/10 flex">
         {mathTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-[12px] font-medium transition-colors cursor-pointer ${
-              activeTab === tab.id ? 'bg-paper text-ink border-b-2 border-ink' : 'text-ink-muted hover:text-ink'
-            }`}
-          >
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-[12px] font-medium transition-colors cursor-pointer ${activeTab === tab.id ? 'bg-paper text-ink border-b-2 border-ink' : 'text-ink-muted hover:text-ink'}`}>
             {tab.label}
           </button>
         ))}
       </div>
-
-      {/* symbol grid */}
       <div className="border border-t-0 border-grain px-3 py-2 flex flex-wrap gap-1">
         {mathTabs.find((t) => t.id === activeTab)?.symbols.map((sym) => (
-          <button
-            key={sym.latex}
-            onClick={() => handleSymClick(sym as MathSym)}
-            title={sym.latex}
-            className="w-10 h-10 flex items-center justify-center rounded-lg text-[16px] text-ink hover:bg-grain/50 transition-colors cursor-pointer border border-transparent hover:border-grain"
-          >
+          <button key={sym.display} onClick={() => handleSymClick(sym as MathSym)} title={sym.latex}
+            className="w-10 h-10 flex items-center justify-center rounded-lg text-[16px] text-ink hover:bg-grain/50 transition-colors cursor-pointer border border-transparent hover:border-grain">
             {sym.display}
           </button>
         ))}
       </div>
-
-      {/* structured field input (fraction, sqrt, etc.) */}
-      {fieldInput && (
-        <div className="border border-t-0 border-grain px-3 py-3 bg-grain/5 flex items-center gap-2">
-          {fieldInput.sym.fields!.map((label, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <span className="text-[11px] text-ink-muted font-mono">{label}</span>
-              <input
-                type="text"
-                value={fieldInput.vals[i]}
-                onChange={(e) => { const v = [...fieldInput.vals]; v[i] = e.target.value; setFieldInput({ ...fieldInput, vals: v }); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') submitFields(); if (e.key === 'Escape') setFieldInput(null); }}
-                autoFocus={i === 0}
-                className="w-16 border border-grain rounded px-2 py-1 font-mono text-[13px] text-ink focus:outline-none focus:border-ink"
-              />
-            </div>
-          ))}
-          {/* live preview */}
-          {(() => {
-            let latex = fieldInput.sym.template ?? '';
-            fieldInput.vals.forEach((v, i) => { latex = latex.replace(`%${i}`, v || '?'); });
-            return <Latex text={`$${latex}$`} className="text-[16px] text-ink mx-2" />;
-          })()}
-          <button onClick={submitFields} className="h-7 px-3 rounded bg-ink text-paper text-[11px] font-medium cursor-pointer hover:bg-ink-soft transition-colors ml-auto">
-            삽입
-          </button>
-        </div>
-      )}
-
-      {/* editor */}
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={handleInput}
-        onClick={handleClick}
+      <div ref={editorRef} contentEditable suppressContentEditableWarning
+        onInput={sync} onKeyDown={handleKeyDown}
         data-placeholder="풀이과정을 입력하세요..."
         className="border border-t-0 border-grain rounded-b-lg px-4 py-3 text-[15px] text-ink leading-relaxed min-h-[120px] focus:outline-none focus:border-ink transition-colors [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-ink-muted"
       />
@@ -290,7 +286,7 @@ type Stroke = { points: Point[]; color: string; width: number };
  * @param props.onSave callback when strokes change
  * @return canvas element
  */
-function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penSize, setPenSize }: {
+function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penSize, setPenSize, onExpand }: {
   strokes?: Stroke[];
   onSave: (strokes: Stroke[]) => void;
   height?: number;
@@ -298,6 +294,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
   setTool: (t: 'pen' | 'eraser' | 'pan') => void;
   penSize: number;
   setPenSize: (s: number) => void;
+  onExpand?: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -716,7 +713,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
           </svg>
         </ToolBtn>
 
-        {/* separator */}
+        {/* separator */} 
         <div className="w-px h-5 bg-grain mx-1" />
 
         {/* zoom */}
@@ -733,6 +730,17 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
             <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /><path d="M11 8v6" /><path d="M8 11h6" />
           </svg>
         </ToolBtn>
+
+        {onExpand && (
+          <>
+            <div className="w-px h-5 bg-grain mx-1" />
+            <ToolBtn onClick={onExpand} title="최대화">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+              </svg>
+            </ToolBtn>
+          </>
+        )}
       </div>
 
       {/* canvas */}
@@ -777,8 +785,7 @@ export default function StudentAssignment() {
   const [questions, setQuestions] = useState<Question[]>([]);
   /** Student answers keyed by question ID */
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  /** Work/solution mode per question ('draw' or 'type') */
-  const [workMode, setWorkMode] = useState<'draw' | 'type'>('draw');
+  /** Work mode is always draw */
   /** Canvas tool */
   const [canvasTool, setCanvasTool] = useState<'pen' | 'eraser' | 'pan'>('pen');
   /** Canvas pen size */
@@ -1267,41 +1274,12 @@ export default function StudentAssignment() {
               <div className="mt-6 pt-5 border-t border-grain">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">풀이과정</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={openFullscreen}
-                      title="최대화"
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-                      </svg>
-                    </button>
-                    <div className="flex gap-1 bg-grain/30 rounded-lg p-0.5">
-                      <button
-                        onClick={() => setWorkMode('draw')}
-                        className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
-                          workMode === 'draw' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
-                        }`}
-                      >
-                        필기
-                      </button>
-                      <button
-                        onClick={() => setWorkMode('type')}
-                        className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
-                          workMode === 'type' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
-                        }`}
-                      >
-                        타이핑
-                      </button>
-                    </div>
-                  </div>
                 </div>
                 {fullscreen ? (
                   <div className="border border-dashed border-grain rounded-lg h-[60px] flex items-center justify-center">
                     <span className="text-[12px] text-ink-muted">최대화 모드에서 편집 중</span>
                   </div>
-                ) : workMode === 'draw' ? (
+                ) : (
                   <DrawCanvas
                     key={q.id}
                     strokes={workDraw[q.id]}
@@ -1311,11 +1289,7 @@ export default function StudentAssignment() {
                     setTool={setCanvasTool}
                     penSize={canvasPenSize}
                     setPenSize={setCanvasPenSize}
-                  />
-                ) : (
-                  <MathEditor
-                    value={workText[q.id] ?? ''}
-                    onChange={(v) => setWorkText((prev) => ({ ...prev, [q.id]: v }))}
+                    onExpand={openFullscreen}
                   />
                 )}
               </div>
@@ -1501,58 +1475,26 @@ export default function StudentAssignment() {
 
           {/* right: canvas */}
           <div className="flex-1 flex flex-col">
-            {/* toolbar */}
-            <div className="flex items-center justify-between px-4 py-2 border-b border-grain">
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1 bg-grain/30 rounded-lg p-0.5">
-                  <button
-                    onClick={() => setWorkMode('draw')}
-                    className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
-                      workMode === 'draw' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
-                    }`}
-                  >
-                    필기
-                  </button>
-                  <button
-                    onClick={() => setWorkMode('type')}
-                    className={`text-[11px] font-mono px-3 py-1 rounded-md transition-colors cursor-pointer ${
-                      workMode === 'type' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
-                    }`}
-                  >
-                    타이핑
-                  </button>
-                </div>
-              </div>
+            {/* canvas area */}
+            <div className="flex-1 p-4 overflow-hidden min-h-0 relative">
               <button
                 onClick={closeFullscreen}
                 title="축소"
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-muted hover:text-ink hover:bg-grain/50 transition-colors cursor-pointer"
+                className="absolute top-6 right-6 z-10 w-8 h-8 flex items-center justify-center rounded-lg bg-paper/80 text-ink-muted hover:text-ink hover:bg-paper transition-colors cursor-pointer shadow-sm"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 14h6v6" /><path d="M20 10h-6V4" /><path d="M14 10l7-7" /><path d="M3 21l7-7" />
                 </svg>
               </button>
-            </div>
-
-            {/* canvas area */}
-            <div className="flex-1 p-4 overflow-hidden min-h-0">
-              {workMode === 'draw' ? (
-                <DrawCanvas
-                  key={q.id}
-                  strokes={workDraw[q.id]}
-                  onSave={(s) => setWorkDraw((prev) => ({ ...prev, [q.id]: s }))}
-                  tool={canvasTool}
-                  setTool={setCanvasTool}
-                  penSize={canvasPenSize}
-                  setPenSize={setCanvasPenSize}
-                />
-              ) : (
-                <MathEditor
-                  value={workText[q.id] ?? ''}
-                  onChange={(v) => setWorkText((prev) => ({ ...prev, [q.id]: v }))}
-                  className="h-full"
-                />
-              )}
+              <DrawCanvas
+                key={q.id}
+                strokes={workDraw[q.id]}
+                onSave={(s) => { recordInput('drawing'); setWorkDraw((prev) => ({ ...prev, [q.id]: s })); }}
+                tool={canvasTool}
+                setTool={setCanvasTool}
+                penSize={canvasPenSize}
+                setPenSize={setCanvasPenSize}
+              />
             </div>
           </div>
         </div>
