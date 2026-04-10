@@ -49,6 +49,8 @@ type Analysis = {
   missingConcepts: string[];
   recommendedPractice: string;
   confidence: number;
+  teacherNoticeRequested: boolean;
+  teacherNoticeReason: string | null;
   createdAt: string;
 };
 
@@ -176,7 +178,7 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
     typeof window === 'undefined' ? true : window.matchMedia('(min-width: 640px)').matches,
   );
   const [dragging, setDragging] = useState(false);
-  const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
+  const [view, setView] = useState({ scale: 0.84, x: 0, y: 0 });
 
   const MIN_SCALE = 0.55;
   const MAX_SCALE = 2.1;
@@ -258,7 +260,7 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
     const nextScale = clampScale(Math.min(
       (viewport.clientWidth - padding) / sceneWidth,
       (viewport.clientHeight - padding) / sceneHeight,
-      1,
+      0.84,
     ));
     setView({
       scale: nextScale,
@@ -547,21 +549,21 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
           <button
             type="button"
             onClick={() => zoomBy(1 / 1.15)}
-            className="h-8 w-8 rounded-full border border-grain bg-paper text-[16px] text-ink transition-colors hover:border-ink"
+            className="h-8 w-8 cursor-pointer rounded-full border border-grain bg-paper text-[16px] text-ink transition-colors hover:border-ink"
           >
             -
           </button>
           <button
             type="button"
             onClick={fitView}
-            className="h-8 rounded-full border border-grain bg-paper px-3 text-[11px] font-mono text-ink transition-colors hover:border-ink"
+            className="h-8 cursor-pointer rounded-full border border-grain bg-paper px-3 text-[11px] font-mono text-ink transition-colors hover:border-ink"
           >
             {Math.round(view.scale * 100)}%
           </button>
           <button
             type="button"
             onClick={() => zoomBy(1.15)}
-            className="h-8 w-8 rounded-full border border-grain bg-paper text-[16px] text-ink transition-colors hover:border-ink"
+            className="h-8 w-8 cursor-pointer rounded-full border border-grain bg-paper text-[16px] text-ink transition-colors hover:border-ink"
           >
             +
           </button>
@@ -983,6 +985,11 @@ export default function AssignmentDetail() {
                           <div className="flex items-center gap-2">
                             <span className="text-[14px] font-medium text-ink">{a.studentName}</span>
                             <span className="text-[10px] font-mono text-ink-muted">문제 {questionNumber}</span>
+                            {a.teacherNoticeRequested && (
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                도움 요청
+                              </span>
+                            )}
                           </div>
                           <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
                             a.confidence > 0.7 ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-amber-50 text-amber-600 border border-amber-200'
@@ -991,6 +998,14 @@ export default function AssignmentDetail() {
                           </span>
                         </div>
                         <div className="space-y-3">
+                          {a.teacherNoticeRequested && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                              <span className="text-[10px] uppercase tracking-[0.14em] text-amber-700 font-medium font-mono">선생님 알림</span>
+                              <p className="text-[13px] text-ink mt-1">
+                                {a.teacherNoticeReason ?? '학생이 현재 개념 설명을 이어가기 어려워 선생님 도움이 필요하다고 판단했습니다.'}
+                              </p>
+                            </div>
+                          )}
                           <div>
                             <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">막힌 지점</span>
                             <p className="text-[14px] text-ink mt-1">{a.stuckPoint}</p>

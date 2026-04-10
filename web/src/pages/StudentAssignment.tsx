@@ -825,6 +825,10 @@ export default function StudentAssignment() {
   const [chatMessages, setChatMessages] = useState<Record<number, { role: 'ai' | 'student'; content: string }[]>>({});
   /** Chat input */
   const [chatInput, setChatInput] = useState('');
+  /** Whether past-self approved moving to the next step */
+  const [advanceApproved, setAdvanceApproved] = useState<Record<number, boolean>>({});
+  /** Whether the question was deferred with teacher help requested */
+  const [teacherHelpRequested, setTeacherHelpRequested] = useState<Record<number, boolean>>({});
   /** Final submission result */
   const [finalResult, setFinalResult] = useState<{ correct: number; total: number } | null>(null);
   /** Submitting state */
@@ -894,6 +898,35 @@ export default function StudentAssignment() {
 
   /** Current question */
   const q = questions[currentIdx];
+  /** Whether the current question is cleared for progression */
+  const currentTeacherHelpRequested = q ? !!teacherHelpRequested[q.id] : false;
+  const currentAdvanceApproved = q ? !!advanceApproved[q.id] || !!teacherHelpRequested[q.id] : false;
+
+  /**
+   * Check whether a target question is accessible.
+   *
+   * @param index question index
+   * @return true if all previous questions are approved
+   */
+  const canAccessQuestion = (index: number) => (
+    index <= 0 || questions.slice(0, index).every((question) => (
+      !!advanceApproved[question.id] || !!teacherHelpRequested[question.id]
+    ))
+  );
+
+  /**
+   * Move to a question while respecting the progression gate.
+   *
+   * @param index question index
+   * @return void
+   */
+  const moveToQuestion = (index: number) => {
+    if (index < 0 || index >= questions.length || !canAccessQuestion(index)) return;
+    const targetQuestion = questions[index];
+    setCurrentIdx(index);
+    setPhase(results[targetQuestion.id] ? 'mirror' : 'answering');
+    setChatInput('');
+  };
 
   /**
    * Normalize the expected answer for comparison.
@@ -1100,6 +1133,8 @@ export default function StudentAssignment() {
       ? `오 맞았다! 근데 나는 아직 잘 모르겠어... 처음에 틀렸을 때랑 지금이 뭐가 달라진 거야? 나한테 설명해줄 수 있어?`
       : `오 정답이래! 근데 나는 이 문제 어떻게 푸는 건지 잘 모르겠거든... 어떻게 풀었는지 나한테 쉽게 설명해줄 수 있어?`;
 
+    setAdvanceApproved((prev) => ({ ...prev, [q.id]: false }));
+    setTeacherHelpRequested((prev) => ({ ...prev, [q.id]: false }));
     setChatMessages((prev) => ({ ...prev, [q.id]: [{ role: 'ai', content: mirrorMsg }] }));
     setChatInput('');
     setPhase('mirror');
@@ -1115,10 +1150,7 @@ export default function StudentAssignment() {
    */
   const goNext = () => {
     if (currentIdx < questions.length - 1) {
-      const nextQ = questions[currentIdx + 1];
-      setCurrentIdx(currentIdx + 1);
-      setPhase(results[nextQ.id] ? 'mirror' : 'answering');
-      setChatInput('');
+      moveToQuestion(currentIdx + 1);
     }
   };
 
@@ -1132,6 +1164,7 @@ export default function StudentAssignment() {
       const prevQ = questions[currentIdx - 1];
       setCurrentIdx(currentIdx - 1);
       setPhase(results[prevQ.id] ? 'mirror' : 'answering');
+      setChatInput('');
     }
   };
 
@@ -1149,10 +1182,11 @@ export default function StudentAssignment() {
    * @return void
    */
   const sendChat = async () => {
-    if (!q || !chatInput.trim() || chatLoading) return;
-    const msgs = chatMessages[q.id] ?? [];
+    if (!user || !q || !chatInput.trim() || chatLoading) return;
+    const questionId = q.id;
+    const msgs = chatMessages[questionId] ?? [];
     const withStudent = [...msgs, { role: 'student' as const, content: chatInput.trim() }];
-    setChatMessages((prev) => ({ ...prev, [q.id]: withStudent }));
+    setChatMessages((prev) => ({ ...prev, [questionId]: withStudent }));
     setChatInput('');
     setChatLoading(true);
 
@@ -1161,16 +1195,32 @@ export default function StudentAssignment() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          studentId: user.id,
+          assignmentId: id,
+          questionId,
+          conceptId: q.concept_id,
+          schoolLevel: q.school_level,
+          grade: q.grade,
+          curriculumTopic: q.curriculum_topic,
           questionText: q.question,
-          workText: workText[q.id] ?? '',
+          questionAnswer: getCorrectAnswer(q),
+          questionExplanation: q.explanation,
+          studentAnswer: answers[questionId]?.trim() ?? '',
+          workText: workText[questionId] ?? '',
           messages: withStudent.map((m) => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })),
         }),
       });
       const data = await res.json();
       const aiReply = data.reply ?? '음... 잘 모르겠어. 좀 더 쉽게 설명해줄 수 있어?';
+      if (data.allowNextQuestion) {
+        setAdvanceApproved((prev) => ({ ...prev, [questionId]: true }));
+      }
+      if (data.teacherHelpRequested) {
+        setTeacherHelpRequested((prev) => ({ ...prev, [questionId]: true }));
+      }
       setChatMessages((prev) => ({
         ...prev,
-        [q.id]: [...(prev[q.id] ?? []), { role: 'ai', content: aiReply }],
+        [questionId]: [...(prev[questionId] ?? []), { role: 'ai', content: aiReply }],
       }));
     } catch {
       /** Fallback if API fails */
@@ -1183,7 +1233,7 @@ export default function StudentAssignment() {
       const idx = Math.min((msgs.length - 1) / 2, fallbacks.length - 1);
       setChatMessages((prev) => ({
         ...prev,
-        [q.id]: [...(prev[q.id] ?? []), { role: 'ai', content: fallbacks[Math.floor(idx)] }],
+        [questionId]: [...(prev[questionId] ?? []), { role: 'ai', content: fallbacks[Math.floor(idx)] }],
       }));
     } finally {
       setChatLoading(false);
@@ -1293,11 +1343,13 @@ export default function StudentAssignment() {
             <div className="flex flex-wrap gap-1.5 mt-4">
               {questions.map((qq, i) => {
                 const r = results[qq.id];
+                const available = canAccessQuestion(i);
                 return (
                   <button
                     key={i}
-                    onClick={() => { setCurrentIdx(i); setPhase(r ? 'mirror' : 'answering'); }}
-                    className={`w-7 h-7 rounded-full text-[11px] font-mono font-medium transition-colors cursor-pointer ${
+                    onClick={() => moveToQuestion(i)}
+                    disabled={!available}
+                    className={`w-7 h-7 rounded-full text-[11px] font-mono font-medium transition-colors ${
                       i === currentIdx
                         ? 'bg-ink text-paper'
                         : r === true && (attempts[qq.id] ?? 0) > 0
@@ -1307,8 +1359,10 @@ export default function StudentAssignment() {
                             : r === false
                               ? 'bg-red-400 text-paper'
                               : answers[qq.id]?.trim()
-                                ? 'bg-ink/20 text-ink'
-                                : 'bg-grain/50 text-ink-muted'
+                            ? 'bg-ink/20 text-ink'
+                            : 'bg-grain/50 text-ink-muted'
+                    } ${
+                      available ? 'cursor-pointer' : 'cursor-not-allowed opacity-35'
                     }`}
                   >
                     {i + 1}
@@ -1488,6 +1542,13 @@ export default function StudentAssignment() {
                     전송
                   </button>
                 </div>
+                <p className={`mt-3 text-[12px] ${currentTeacherHelpRequested ? 'text-amber-700' : currentAdvanceApproved ? 'text-emerald-700' : 'text-ink-muted'}`}>
+                  {currentTeacherHelpRequested
+                    ? '선생님께 도움 요청을 남기고 이 문제는 보류 처리했습니다. 다음 단계로 진행할 수 있습니다.'
+                    : currentAdvanceApproved
+                    ? '과거의 내가 개념을 이해했습니다. 이제 다음 단계로 진행할 수 있습니다.'
+                    : '과거의 내가 이해했다고 판단하기 전까지는 다음 문제로 넘어갈 수 없습니다.'}
+                </p>
               </div>
             )}
 
@@ -1513,7 +1574,7 @@ export default function StudentAssignment() {
               ) : isLast ? (
                 <button
                   onClick={handleFinalSubmit}
-                  disabled={submitting}
+                  disabled={submitting || !currentAdvanceApproved}
                   className="h-11 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   {submitting ? '제출 중...' : '최종 제출'}
@@ -1521,7 +1582,8 @@ export default function StudentAssignment() {
               ) : (
                 <button
                   onClick={goNext}
-                  className="h-11 px-5 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer"
+                  disabled={!currentAdvanceApproved}
+                  className="h-11 px-5 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   다음 문제 →
                 </button>

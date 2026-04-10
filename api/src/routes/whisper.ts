@@ -389,6 +389,8 @@ whisper.get('/assignment/:assignmentId', async (c) => {
       missingConcepts: ctx.missing_concepts,
       recommendedPractice: ctx.recommended_practice,
       confidence: ctx.confidence,
+      teacherNoticeRequested: ctx.teacher_notice_requested === true,
+      teacherNoticeReason: ctx.teacher_notice_reason ?? null,
       createdAt: r.created_at,
     };
   });
