@@ -187,10 +187,10 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
     typeof window === 'undefined' ? true : window.matchMedia('(min-width: 640px)').matches,
   );
   const [dragging, setDragging] = useState(false);
-  const [view, setView] = useState({ scale: 0.83, x: 0, y: 0 });
-
+  const DEFAULT_SCALE = 0.83;
   const MIN_SCALE = 0.55;
   const MAX_SCALE = 2.1;
+  const [view, setView] = useState({ scale: DEFAULT_SCALE, x: 0, y: 0 });
   const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
   const lerp = (start: number, end: number, progress: number) => start + (end - start) * progress;
   const semanticZoom = clamp01((view.scale - 0.72) / 0.95);
@@ -258,19 +258,14 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
   const clampScale = (nextScale: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale));
 
   /**
-   * Fit the entire map scene into the viewport.
+   * Reset the map to the centered default scale.
    *
    * @return void
    */
-  const fitView = () => {
+  const resetView = () => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const padding = desktopLayout ? 32 : 20;
-    const nextScale = clampScale(Math.min(
-      (viewport.clientWidth - padding) / sceneWidth,
-      (viewport.clientHeight - padding) / sceneHeight,
-      0.83,
-    ));
+    const nextScale = DEFAULT_SCALE;
     setView({
       scale: nextScale,
       x: (viewport.clientWidth - sceneWidth * nextScale) / 2,
@@ -335,14 +330,14 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
 
   /** Fit scene when the dataset or layout mode changes. */
   useEffect(() => {
-    fitView();
+    resetView();
   }, [desktopLayout, snapshot.concept.id, snapshot.lineage.length]);
 
   /** Re-fit when the viewport size itself changes. */
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const observer = new ResizeObserver(() => fitView());
+    const observer = new ResizeObserver(() => resetView());
     observer.observe(viewport);
     return () => observer.disconnect();
   }, [desktopLayout, snapshot.concept.id, snapshot.lineage.length]);
@@ -561,7 +556,7 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
           dragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
         style={{ height: viewportHeight }}
-        onDoubleClick={fitView}
+        onDoubleClick={resetView}
         onWheel={(e) => {
           if (isCanvasControlTarget(e.target)) return;
           e.preventDefault();
@@ -624,9 +619,9 @@ function CurriculumMindMap({ snapshot }: { snapshot: QuestionCurriculumSnapshot 
           </button>
           <button
             type="button"
-            onClick={fitView}
+            onClick={resetView}
             className="h-8 cursor-pointer rounded-full border border-grain bg-paper px-3 text-[11px] font-mono text-ink transition-colors hover:border-ink"
-            aria-label={`${zoomLabel} 보기로 맞추기`}
+            aria-label="기본 배율로 맞추기"
           >
             {Math.round(view.scale * 100)}%
           </button>
