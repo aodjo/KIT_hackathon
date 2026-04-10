@@ -36,6 +36,11 @@ type LearningAnalysisUpdate = {
   reason: string;
 };
 
+type MirrorTranscriptMessage = {
+  role: 'ai' | 'student';
+  content: string;
+};
+
 /**
  * Normalize arbitrary values into a string array.
  *
@@ -123,6 +128,28 @@ const findLatestToolInput = (
   }
   return null;
 };
+
+/**
+ * Normalize chat messages for persistence.
+ *
+ * @param messages request messages
+ * @param reply latest AI reply
+ * @return cleaned transcript
+ */
+const buildTranscript = (
+  messages: MirrorChatRequest['messages'],
+  reply: string,
+): MirrorTranscriptMessage[] => [
+  ...messages
+    .map((message) => ({
+      role: message.role === 'assistant' ? 'ai' : 'student',
+      content: String(message.content ?? '').trim(),
+    }))
+    .filter((message): message is MirrorTranscriptMessage => (
+      (message.role === 'ai' || message.role === 'student') && message.content.length > 0
+    )),
+  ...(reply.trim() ? [{ role: 'ai' as const, content: reply.trim() }] : []),
+];
 
 /**
  * POST /api/mirror/chat
@@ -385,13 +412,40 @@ ${existingAnalysisText}`,
     }
 
     const allowNextQuestion = allowNextByUnderstanding || teacherHelpRequested;
+    const resolvedReply = reply || (teacherHelpRequested
+      ? '선생님께 도움 요청 남겨둘게. 이 문제는 잠깐 보류하고 다음 문제로 넘어가자.'
+      : allowNextQuestion
+      ? '이제 이해했어. 다음 문제로 넘어가도 될 것 같아.'
+      : '음... 아직은 잘 모르겠어. 조금만 더 설명해줄래?');
+    const transcript = buildTranscript(messages, resolvedReply);
+
+    if (studentId != null && assignmentId && questionId != null && transcript.length > 0) {
+      await c.env.DB.prepare(
+        `DELETE FROM behavior_signals
+         WHERE student_id = ?
+           AND type = 'mirror_chat'
+           AND json_extract(payload, '$.assignment_id') = ?
+           AND json_extract(payload, '$.question_id') = ?`,
+      )
+        .bind(studentId, assignmentId, questionId)
+        .run();
+
+      await c.env.DB.prepare(
+        `INSERT INTO behavior_signals (student_id, type, payload)
+         VALUES (?, 'mirror_chat', ?)`,
+      ).bind(
+        studentId,
+        JSON.stringify({
+          assignment_id: assignmentId,
+          question_id: questionId,
+          concept_id: conceptId ?? null,
+          messages: transcript,
+        }),
+      ).run();
+    }
 
     return c.json({
-      reply: reply || (teacherHelpRequested
-        ? '선생님께 도움 요청 남겨둘게. 이 문제는 잠깐 보류하고 다음 문제로 넘어가자.'
-        : allowNextQuestion
-        ? '이제 이해했어. 다음 문제로 넘어가도 될 것 같아.'
-        : '음... 아직은 잘 모르겠어. 조금만 더 설명해줄래?'),
+      reply: resolvedReply,
       allowNextQuestion,
       analysisUpdated,
       teacherHelpRequested,
@@ -405,6 +459,47 @@ ${existingAnalysisText}`,
       error: String(e),
     });
   }
+});
+
+/**
+ * GET /api/mirror/assignment/:assignmentId
+ * Get saved mirror chat transcripts for a teacher-facing assignment view.
+ *
+ * @return list of transcripts per student/question
+ */
+mirror.get('/assignment/:assignmentId', async (c) => {
+  const assignmentId = c.req.param('assignmentId');
+
+  const result = await c.env.DB.prepare(
+    `SELECT bs.student_id, u.name as student_name, bs.payload, bs.created_at
+     FROM behavior_signals bs
+     JOIN users u ON bs.student_id = u.id
+     WHERE bs.type = 'mirror_chat'
+       AND json_extract(bs.payload, '$.assignment_id') = ?
+     ORDER BY bs.created_at DESC`,
+  ).bind(assignmentId).all();
+
+  const conversations = result.results.map((row: any) => {
+    const payload = JSON.parse(row.payload);
+    const messages = Array.isArray(payload.messages)
+      ? payload.messages
+        .map((message: any) => ({
+          role: message?.role === 'ai' ? 'ai' : 'student',
+          content: String(message?.content ?? '').trim(),
+        }))
+        .filter((message: MirrorTranscriptMessage) => message.content.length > 0)
+      : [];
+
+    return {
+      studentId: row.student_id,
+      studentName: row.student_name,
+      questionId: Number(payload.question_id),
+      messages,
+      createdAt: row.created_at,
+    };
+  });
+
+  return c.json({ conversations });
 });
 
 export default mirror;

@@ -43,6 +43,7 @@ type Submission = {
 };
 
 type Analysis = {
+  studentId: number;
   studentName: string;
   questionId: number;
   stuckPoint: string;
@@ -51,6 +52,14 @@ type Analysis = {
   confidence: number;
   teacherNoticeRequested: boolean;
   teacherNoticeReason: string | null;
+  createdAt: string;
+};
+
+type MirrorConversation = {
+  studentId: number;
+  studentName: string;
+  questionId: number;
+  messages: { role: 'ai' | 'student'; content: string }[];
   createdAt: string;
 };
 
@@ -743,16 +752,47 @@ export default function AssignmentDetail() {
   const [tab, setTab] = useState<'questions' | 'submissions' | 'analysis'>('questions');
   /** Stuck analyses from Whisper */
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
+  /** Mirror chat transcripts keyed by student/question */
+  const [conversations, setConversations] = useState<MirrorConversation[]>([]);
   /** Curriculum snapshot keyed by question ID */
   const [analysisCurriculum, setAnalysisCurriculum] = useState<Record<number, QuestionCurriculumSnapshot>>({});
   /** Selected student filter for analysis cards */
   const [selectedStudent, setSelectedStudent] = useState('all');
+  /** Expanded mirror-chat cards keyed by student/question */
+  const [openConversationKeys, setOpenConversationKeys] = useState<Record<string, boolean>>({});
+  /** Expanded concept-map cards keyed by student/question */
+  const [openConceptMapKeys, setOpenConceptMapKeys] = useState<Record<string, boolean>>({});
+  const analysisMap = new Map(analyses.map((analysis) => [`${analysis.studentId}:${analysis.questionId}`, analysis]));
+  const conversationMap = new Map(conversations.map((conversation) => [`${conversation.studentId}:${conversation.questionId}`, conversation]));
+  const analysisCards = Array.from(new Set([
+    ...analyses.map((analysis) => `${analysis.studentId}:${analysis.questionId}`),
+    ...conversations.map((conversation) => `${conversation.studentId}:${conversation.questionId}`),
+  ]))
+    .map((key) => {
+      const analysis = analysisMap.get(key);
+      const conversation = conversationMap.get(key);
+      return {
+        studentId: analysis?.studentId ?? conversation?.studentId ?? 0,
+        studentName: analysis?.studentName ?? conversation?.studentName ?? '',
+        questionId: analysis?.questionId ?? conversation?.questionId ?? 0,
+        stuckPoint: analysis?.stuckPoint ?? null,
+        missingConcepts: analysis?.missingConcepts ?? [],
+        recommendedPractice: analysis?.recommendedPractice ?? null,
+        confidence: analysis?.confidence ?? null,
+        teacherNoticeRequested: analysis?.teacherNoticeRequested ?? false,
+        teacherNoticeReason: analysis?.teacherNoticeReason ?? null,
+        createdAt: analysis?.createdAt ?? conversation?.createdAt ?? '',
+        messages: conversation?.messages ?? [],
+        hasAnalysis: !!analysis,
+      };
+    })
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
 
-  const studentOptions = Array.from(new Set(analyses.map((analysis) => analysis.studentName)))
+  const studentOptions = Array.from(new Set(analysisCards.map((card) => card.studentName).filter(Boolean)))
     .sort((left, right) => left.localeCompare(right, 'ko-KR'));
   const filteredAnalyses = selectedStudent === 'all'
-    ? analyses
-    : analyses.filter((analysis) => analysis.studentName === selectedStudent);
+    ? analysisCards
+    : analysisCards.filter((analysis) => analysis.studentName === selectedStudent);
   const showAnalysisSidebar = tab === 'analysis';
   const studentDropdownOptions: SidebarDropdownOption[] = [
     { value: 'all', label: '전체 학생' },
@@ -796,19 +836,39 @@ export default function AssignmentDetail() {
     return () => window.clearInterval(timer);
   }, [id]);
 
+  /** Fetch mirror chat transcripts for teacher review */
+  useEffect(() => {
+    if (!id) return;
+    const load = () => {
+      fetch(`${API}/api/mirror/assignment/${id}`)
+        .then((r) => r.json())
+        .then((d) => setConversations(d.conversations ?? []))
+        .catch(() => {});
+    };
+
+    load();
+    const timer = window.setInterval(load, 10000);
+    return () => window.clearInterval(timer);
+  }, [id]);
+
   /** Reset the student filter when the assignment changes */
   useEffect(() => {
     setSelectedStudent('all');
+    setOpenConversationKeys({});
+    setOpenConceptMapKeys({});
   }, [id]);
 
   /** Fetch curriculum snapshots for analysed questions */
   useEffect(() => {
-    if (analyses.length === 0) return;
+    const questionIds = Array.from(new Set([
+      ...analyses.map((analysis) => analysis.questionId),
+      ...conversations.map((conversation) => conversation.questionId),
+    ]));
+
+    if (questionIds.length === 0) return;
 
     const missing = Array.from(new Set(
-      analyses
-        .map((analysis) => analysis.questionId)
-        .filter((questionId) => !analysisCurriculum[questionId]),
+      questionIds.filter((questionId) => !analysisCurriculum[questionId]),
     ));
 
     if (missing.length === 0) return;
@@ -824,7 +884,7 @@ export default function AssignmentDetail() {
     return () => {
       cancelled = true;
     };
-  }, [analyses, analysisCurriculum]);
+  }, [analyses, conversations, analysisCurriculum]);
 
   if (!assignment) {
     return (
@@ -878,7 +938,7 @@ export default function AssignmentDetail() {
                 onClick={() => setTab('analysis')}
                 className={`px-4 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer ${tab === 'analysis' ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink'}`}
               >
-                학습 분석 {analyses.length > 0 && `(${analyses.length})`}
+                학습 분석 {analysisCards.length > 0 && `(${analysisCards.length})`}
               </button>
             </div>
 
@@ -964,7 +1024,7 @@ export default function AssignmentDetail() {
               )
             )}
             {tab === 'analysis' && (
-              analyses.length === 0 ? (
+              analysisCards.length === 0 ? (
                 <div className="border border-grain rounded-lg p-8 text-center">
                   <p className="text-[14px] text-ink-muted">아직 분석된 데이터가 없습니다.</p>
                   <p className="text-[12px] text-ink-muted mt-1">학생들이 문제를 풀면서 막히는 순간이 감지되면 AI가 분석합니다.</p>
@@ -978,6 +1038,18 @@ export default function AssignmentDetail() {
                   ) : filteredAnalyses.map((a, i) => {
                     const curriculum = analysisCurriculum[a.questionId];
                     const questionNumber = questions.findIndex((q) => q.id === a.questionId) + 1;
+                    const cardKey = `${a.studentId}:${a.questionId}`;
+                    const conversationOpen = !!openConversationKeys[cardKey];
+                    const conceptMapOpen = !!openConceptMapKeys[cardKey];
+                    const conversationPreview = a.messages.length > 0
+                      ? a.messages[a.messages.length - 1].content
+                      : '';
+                    const trimmedConversationPreview = conversationPreview.length > 88
+                      ? `${conversationPreview.slice(0, 88)}...`
+                      : conversationPreview;
+                    const conceptMapSummary = curriculum?.concept
+                      ? `${curriculum.concept.id} · ${curriculum.lineage.length}개 개념 노드`
+                      : `${curriculum?.lineage.length ?? 0}개 개념 노드`;
 
                     return (
                       <div key={i} className="border border-grain rounded-lg p-5 bg-paper">
@@ -991,11 +1063,17 @@ export default function AssignmentDetail() {
                               </span>
                             )}
                           </div>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                            a.confidence > 0.7 ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-amber-50 text-amber-600 border border-amber-200'
-                          }`}>
-                            {Math.round(a.confidence * 100)}%
-                          </span>
+                          {a.confidence != null ? (
+                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                              a.confidence > 0.7 ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-amber-50 text-amber-600 border border-amber-200'
+                            }`}>
+                              {Math.round(a.confidence * 100)}%
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-grain bg-grain/20 text-ink-muted">
+                              대화 기록
+                            </span>
+                          )}
                         </div>
                         <div className="space-y-3">
                           {a.teacherNoticeRequested && (
@@ -1006,28 +1084,128 @@ export default function AssignmentDetail() {
                               </p>
                             </div>
                           )}
-                          <div>
-                            <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">막힌 지점</span>
-                            <p className="text-[14px] text-ink mt-1">{a.stuckPoint}</p>
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">부족한 개념</span>
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              {a.missingConcepts.map((c, j) => (
-                                <span key={j} className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">{c}</span>
-                              ))}
+                          {a.hasAnalysis ? (
+                            <>
+                              <div>
+                                <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">막힌 지점</span>
+                                <p className="text-[14px] text-ink mt-1">{a.stuckPoint}</p>
+                              </div>
+                              <div>
+                                <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">부족한 개념</span>
+                                <div className="flex flex-wrap gap-1.5 mt-1">
+                                  {a.missingConcepts.map((c, j) => (
+                                    <span key={j} className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">{c}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="rounded-lg border border-grain bg-grain/15 p-3">
+                              <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">학습 분석</span>
+                              <p className="text-[13px] text-ink-muted mt-1">아직 별도 분석은 없고, 학생의 설명 대화 기록만 있습니다.</p>
                             </div>
-                          </div>
+                          )}
+                          {a.messages.length > 0 && (
+                            <div>
+                              <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">설명 대화</span>
+                              <div className="mt-2 overflow-hidden rounded-lg border border-grain bg-grain/10">
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenConversationKeys((prev) => ({
+                                    ...prev,
+                                    [cardKey]: !prev[cardKey],
+                                  }))}
+                                  aria-expanded={conversationOpen}
+                                  className="flex w-full cursor-pointer items-start justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-grain/20"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-[13px] text-ink">
+                                      학생과 AI가 나눈 {a.messages.length}개 메시지
+                                    </p>
+                                    {trimmedConversationPreview && (
+                                      <p className="mt-1 truncate text-[11px] text-ink-muted">
+                                        {trimmedConversationPreview}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="shrink-0 text-right">
+                                    <span className="inline-flex min-w-7 items-center justify-center rounded-full border border-grain bg-paper px-2 py-0.5 text-[10px] font-mono text-ink-muted">
+                                      {a.messages.length}
+                                    </span>
+                                  </div>
+                                </button>
+                                <div
+                                  aria-hidden={!conversationOpen}
+                                  className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                    conversationOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                                  }`}
+                                >
+                                  <div className="min-h-0 overflow-hidden">
+                                    <div className="space-y-3 border-t border-grain bg-paper/70 p-4">
+                                      {a.messages.map((message, index) => (
+                                        <div key={index} className="flex flex-col gap-1">
+                                          <span className={`text-[10px] uppercase tracking-[0.14em] font-mono font-medium ${message.role === 'ai' ? 'text-clay-deep' : 'text-ink'}`}>
+                                            {message.role === 'ai' ? '과거의 나' : '학생'}
+                                          </span>
+                                          <p className={`text-[13px] leading-relaxed ${message.role === 'ai' ? 'text-ink-muted' : 'text-ink'}`}>
+                                            {message.content}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                           {curriculum && curriculum.lineage.length > 0 && (
                             <div>
                               <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">개념 맵</span>
-                              <CurriculumMindMap snapshot={curriculum} />
+                              <div className="mt-2 overflow-hidden rounded-lg border border-grain bg-grain/10">
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenConceptMapKeys((prev) => ({
+                                    ...prev,
+                                    [cardKey]: !prev[cardKey],
+                                  }))}
+                                  aria-expanded={conceptMapOpen}
+                                  className="flex w-full cursor-pointer items-start justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-grain/20"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-[13px] text-ink">
+                                      {conceptMapSummary}
+                                    </p>
+                                    <p className="mt-1 truncate text-[11px] text-ink-muted">
+                                      선수 개념 경로와 현재 단원 관계 보기
+                                    </p>
+                                  </div>
+                                  <div className="shrink-0 text-right">
+                                    <span className="inline-flex min-w-7 items-center justify-center rounded-full border border-grain bg-paper px-2 py-0.5 text-[10px] font-mono text-ink-muted">
+                                      {curriculum.lineage.length}
+                                    </span>
+                                  </div>
+                                </button>
+                                <div
+                                  aria-hidden={!conceptMapOpen}
+                                  className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                    conceptMapOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                                  }`}
+                                >
+                                  <div className="min-h-0 overflow-hidden">
+                                    <div className="border-t border-grain bg-paper/70 p-4">
+                                      <CurriculumMindMap snapshot={curriculum} />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           )}
-                          <div>
-                            <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">추천 연습</span>
-                            <p className="text-[14px] text-ink mt-1">{a.recommendedPractice}</p>
-                          </div>
+                          {a.recommendedPractice && (
+                            <div>
+                              <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">추천 연습</span>
+                              <p className="text-[14px] text-ink mt-1">{a.recommendedPractice}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
