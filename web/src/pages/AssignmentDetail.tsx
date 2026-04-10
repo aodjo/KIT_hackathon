@@ -80,7 +80,6 @@ function Latex({ text, className }: { text: string; className?: string }) {
 type SidebarDropdownOption = {
   value: string;
   label: string;
-  meta?: string;
 };
 
 /**
@@ -124,18 +123,11 @@ function SidebarDropdown({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className={`flex w-full items-center justify-between rounded-lg border bg-paper px-4 py-3 text-left transition-colors ${
-          open ? 'border-ink shadow-[0_10px_24px_rgba(40,38,34,0.08)]' : 'border-grain hover:border-ink/40'
+        className={`flex h-11 w-full cursor-pointer items-center justify-between rounded-xl border bg-paper px-4 text-left text-[14px] leading-none transition-colors ${
+          open ? 'border-ink shadow-[0_8px_18px_rgba(40,38,34,0.08)]' : 'border-grain hover:border-ink/40'
         }`}
       >
-        <div className="min-w-0">
-          <p className="truncate text-[14px] text-ink">{selected?.label ?? '선택'}</p>
-          {selected?.meta && (
-            <p className="mt-1 truncate text-[10px] font-mono uppercase tracking-[0.12em] text-ink-muted">
-              {selected.meta}
-            </p>
-          )}
-        </div>
+        <span className="truncate text-ink">{selected?.label ?? '선택'}</span>
         <span
           className={`ml-3 shrink-0 text-[12px] text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`}
         >
@@ -143,8 +135,8 @@ function SidebarDropdown({
         </span>
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 overflow-hidden rounded-2xl border border-grain bg-paper shadow-paper-lg">
-          <div className="max-h-64 overflow-y-auto py-1.5">
+        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 overflow-hidden rounded-xl border border-grain bg-paper shadow-paper-lg">
+          <div className="max-h-64 overflow-y-auto">
             {options.map((option) => (
               <button
                 key={option.value}
@@ -153,25 +145,11 @@ function SidebarDropdown({
                   setOpen(false);
                   if (option.value !== value) onChange(option.value);
                 }}
-                className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors ${
+                className={`flex h-11 w-full cursor-pointer items-center px-4 text-left text-[14px] leading-none transition-colors ${
                   option.value === value ? 'bg-ink text-paper' : 'text-ink hover:bg-grain/30'
                 }`}
               >
-                <div className="min-w-0">
-                  <p className="truncate text-[14px]">{option.label}</p>
-                  {option.meta && (
-                    <p className={`mt-1 truncate text-[10px] font-mono uppercase tracking-[0.12em] ${
-                      option.value === value ? 'text-paper/65' : 'text-ink-muted'
-                    }`}>
-                      {option.meta}
-                    </p>
-                  )}
-                </div>
-                {option.value === value && (
-                  <span className="ml-3 shrink-0 text-[10px] font-mono uppercase tracking-[0.12em] text-paper/70">
-                    선택됨
-                  </span>
-                )}
+                <span className="truncate">{option.label}</span>
               </button>
             ))}
           </div>
@@ -784,14 +762,12 @@ export default function AssignmentDetail() {
   const assignmentDropdownOptions: SidebarDropdownOption[] = assignmentOptions.map((option) => ({
     value: String(option.id),
     label: option.title,
-    meta: option.workbook_id ? '문제집 과제' : '직접 과제',
   }));
   const studentDropdownOptions: SidebarDropdownOption[] = [
-    { value: 'all', label: '전체 학생', meta: `${analyses.length}개 분석` },
+    { value: 'all', label: '전체 학생' },
     ...studentOptions.map((studentName) => ({
       value: studentName,
       label: studentName,
-      meta: `${analyses.filter((analysis) => analysis.studentName === studentName).length}개 분석`,
     })),
   ];
 
