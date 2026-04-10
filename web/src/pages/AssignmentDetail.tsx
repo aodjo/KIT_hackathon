@@ -3,6 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import AppLayout from '../components/AppLayout';
+import {
+  fetchQuestionCurriculumMap,
+  type QuestionCurriculumSnapshot,
+} from '../lib/curriculumApi';
 
 /** API base URL */
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
@@ -36,6 +40,16 @@ type Submission = {
   answer: string;
   correct: number;
   submitted_at: string;
+};
+
+type Analysis = {
+  studentName: string;
+  questionId: number;
+  stuckPoint: string;
+  missingConcepts: string[];
+  recommendedPractice: string;
+  confidence: number;
+  createdAt: string;
 };
 
 /** Difficulty badge color */
@@ -81,7 +95,9 @@ export default function AssignmentDetail() {
   /** Active tab */
   const [tab, setTab] = useState<'questions' | 'submissions' | 'analysis'>('questions');
   /** Stuck analyses from Whisper */
-  const [analyses, setAnalyses] = useState<{ studentName: string; questionId: number; stuckPoint: string; missingConcepts: string[]; recommendedPractice: string; confidence: number; createdAt: string }[]>([]);
+  const [analyses, setAnalyses] = useState<Analysis[]>([]);
+  /** Curriculum snapshot keyed by question ID */
+  const [analysisCurriculum, setAnalysisCurriculum] = useState<Record<number, QuestionCurriculumSnapshot>>({});
 
   /** Fetch assignment + submissions */
   useEffect(() => {
@@ -116,6 +132,31 @@ export default function AssignmentDetail() {
     const timer = window.setInterval(load, 10000);
     return () => window.clearInterval(timer);
   }, [id]);
+
+  /** Fetch curriculum snapshots for analysed questions */
+  useEffect(() => {
+    if (analyses.length === 0) return;
+
+    const missing = Array.from(new Set(
+      analyses
+        .map((analysis) => analysis.questionId)
+        .filter((questionId) => !analysisCurriculum[questionId]),
+    ));
+
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    fetchQuestionCurriculumMap(missing)
+      .then((snapshotMap) => {
+        if (cancelled) return;
+        setAnalysisCurriculum((prev) => ({ ...prev, ...snapshotMap }));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [analyses, analysisCurriculum]);
 
   if (!assignment) {
     return (
@@ -262,6 +303,10 @@ export default function AssignmentDetail() {
             <div className="space-y-3">
               {analyses.map((a, i) => (
                 <div key={i} className="border border-grain rounded-lg p-5 bg-paper">
+                  {(() => {
+                    const curriculum = analysisCurriculum[a.questionId];
+                    return (
+                      <>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-[14px] font-medium text-ink">{a.studentName}</span>
@@ -286,11 +331,41 @@ export default function AssignmentDetail() {
                         ))}
                       </div>
                     </div>
+                    {curriculum?.concept && (
+                      <div>
+                        <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">현재 단원</span>
+                        <p className="text-[13px] text-ink mt-1 font-mono">
+                          {curriculum.concept.id} · {curriculum.concept.schoolLevel} {curriculum.concept.grade} · {curriculum.concept.curriculum.join(', ')}
+                        </p>
+                      </div>
+                    )}
+                    {curriculum && curriculum.lineage.length > 0 && (
+                      <div>
+                        <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">선수 개념 경로</span>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {curriculum.lineage.map((concept) => (
+                            <span
+                              key={concept.id}
+                              className={`text-[11px] font-mono px-2 py-0.5 rounded-full border ${
+                                concept.id === curriculum.concept?.id
+                                  ? 'bg-ink text-paper border-ink'
+                                  : 'bg-grain/30 text-ink-muted border-grain'
+                              }`}
+                            >
+                              {concept.id}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <span className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">추천 연습</span>
                       <p className="text-[14px] text-ink mt-1">{a.recommendedPractice}</p>
                     </div>
                   </div>
+                      </>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

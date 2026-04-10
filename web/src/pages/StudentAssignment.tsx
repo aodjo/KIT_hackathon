@@ -4,6 +4,10 @@ import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import AppLayout from '../components/AppLayout';
 import { getStoredUser } from '../lib/auth';
+import {
+  fetchQuestionCurriculumMap,
+  type QuestionCurriculumSnapshot,
+} from '../lib/curriculumApi';
 
 /** API base URL */
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
@@ -843,6 +847,8 @@ export default function StudentAssignment() {
   const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Hesitation count for UI update */
   const [hesitationCounts, setHesitationCounts] = useState<Record<number, number>>({});
+  /** Curriculum snapshot per question from API */
+  const [questionCurriculum, setQuestionCurriculum] = useState<Record<number, QuestionCurriculumSnapshot>>({});
   /** Hidden-question inference request state per question */
   const whisperPending = useRef<Record<number, boolean>>({});
   const whisperLastSentKey = useRef<Record<number, string>>({});
@@ -862,6 +868,29 @@ export default function StudentAssignment() {
       .then((r) => r.json())
       .then((d) => setQuestions(d.questions ?? []));
   }, [id]);
+
+  /** Fetch curriculum snapshots for loaded questions */
+  useEffect(() => {
+    if (questions.length === 0) return;
+
+    const missing = questions
+      .map((question) => question.id)
+      .filter((questionId) => !questionCurriculum[questionId]);
+
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    fetchQuestionCurriculumMap(missing)
+      .then((snapshotMap) => {
+        if (cancelled) return;
+        setQuestionCurriculum((prev) => ({ ...prev, ...snapshotMap }));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [questions, questionCurriculum]);
 
   /** Current question */
   const q = questions[currentIdx];
@@ -904,6 +933,7 @@ export default function StudentAssignment() {
   const sendWhisperAnalysis = (question: Question, studentAnswer: string, isCorrect: boolean) => {
     if (!user || !id) return;
     const sig = getSignal(question.id);
+    const curriculumSnapshot = questionCurriculum[question.id];
     if (!shouldSendWhisper(isCorrect, sig)) return;
     const requestKey = JSON.stringify({
       studentAnswer,
@@ -911,6 +941,7 @@ export default function StudentAssignment() {
       hesitations: sig.hesitations.length,
       deleteCount: sig.deleteCount,
       answerChanges: sig.answerChanges,
+      conceptId: curriculumSnapshot?.question.concept_id ?? question.concept_id,
     });
     if (whisperPending.current[question.id] || whisperLastSentKey.current[question.id] === requestKey) return;
 
@@ -923,10 +954,10 @@ export default function StudentAssignment() {
         studentId: user.id,
         assignmentId: id,
         questionId: question.id,
-        conceptId: question.concept_id,
-        schoolLevel: question.school_level,
-        grade: question.grade,
-        curriculumTopic: question.curriculum_topic,
+        conceptId: curriculumSnapshot?.question.concept_id ?? question.concept_id,
+        schoolLevel: curriculumSnapshot?.question.school_level ?? question.school_level,
+        grade: curriculumSnapshot?.question.grade ?? question.grade,
+        curriculumTopic: curriculumSnapshot?.question.curriculum_topic ?? question.curriculum_topic,
         questionText: question.question,
         questionAnswer: getCorrectAnswer(question),
         questionExplanation: question.explanation,
