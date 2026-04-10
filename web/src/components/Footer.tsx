@@ -58,6 +58,11 @@ export default function Footer() {
                     Protégé Effect
                   </Link>
                 </li>
+                <li>
+                  <Link to="/articles/what-does-learning-analysis-percentage-mean-345678" className="hover:text-ink transition-colors">
+                    분석 퍼센트
+                  </Link>
+                </li>
               </ul>
             </div>
 
