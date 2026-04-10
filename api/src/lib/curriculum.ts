@@ -1,4 +1,4 @@
-import curriculumData from '../../../web/src/content/data.json';
+import curriculumData from '../content/curriculum.json';
 
 type SchoolLevel = '초등학교' | '중학교' | '고등학교';
 type SubjectArea = '수와 연산' | '변화와 관계' | '도형과 측정' | '자료와 가능성';
