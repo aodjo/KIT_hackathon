@@ -286,7 +286,7 @@ type Stroke = { points: Point[]; color: string; width: number };
  * @param props.onSave callback when strokes change
  * @return canvas element
  */
-function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penSize, setPenSize, onExpand }: {
+function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penSize, setPenSize, onExpand, onCollapse }: {
   strokes?: Stroke[];
   onSave: (strokes: Stroke[]) => void;
   height?: number;
@@ -295,6 +295,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
   penSize: number;
   setPenSize: (s: number) => void;
   onExpand?: () => void;
+  onCollapse?: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -731,14 +732,23 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
           </svg>
         </ToolBtn>
 
-        {onExpand && (
+        {(onExpand || onCollapse) && (
           <>
             <div className="w-px h-5 bg-grain mx-1" />
-            <ToolBtn onClick={onExpand} title="최대화">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-              </svg>
-            </ToolBtn>
+            {onExpand && (
+              <ToolBtn onClick={onExpand} title="최대화">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                </svg>
+              </ToolBtn>
+            )}
+            {onCollapse && (
+              <ToolBtn onClick={onCollapse} title="축소">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 14h6v6" /><path d="M20 10h-6V4" /><path d="M14 10l7-7" /><path d="M3 21l7-7" />
+                </svg>
+              </ToolBtn>
+            )}
           </>
         )}
       </div>
@@ -1476,16 +1486,7 @@ export default function StudentAssignment() {
           {/* right: canvas */}
           <div className="flex-1 flex flex-col">
             {/* canvas area */}
-            <div className="flex-1 p-4 overflow-hidden min-h-0 relative">
-              <button
-                onClick={closeFullscreen}
-                title="축소"
-                className="absolute top-6 right-6 z-10 w-8 h-8 flex items-center justify-center rounded-lg bg-paper/80 text-ink-muted hover:text-ink hover:bg-paper transition-colors cursor-pointer shadow-sm"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 14h6v6" /><path d="M20 10h-6V4" /><path d="M14 10l7-7" /><path d="M3 21l7-7" />
-                </svg>
-              </button>
+            <div className="flex-1 p-4 overflow-hidden min-h-0">
               <DrawCanvas
                 key={q.id}
                 strokes={workDraw[q.id]}
@@ -1494,6 +1495,7 @@ export default function StudentAssignment() {
                 setTool={setCanvasTool}
                 penSize={canvasPenSize}
                 setPenSize={setCanvasPenSize}
+                onCollapse={closeFullscreen}
               />
             </div>
           </div>
