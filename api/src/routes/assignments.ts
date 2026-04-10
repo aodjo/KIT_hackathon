@@ -165,7 +165,7 @@ assignments.post('/:id/submit-answers', async (c) => {
 /**
  * POST /api/assignments/:id/signals
  * Store behavior signals for a student's assignment attempt.
- * Body: { studentId, signals: { questionId, dwellMs, deleteCount, pauseCount, revisitCount, answerChanges, struggles }[] }
+ * Body: { studentId, signals: { questionId, hesitations, deleteCount, answerChanges }[] }
  */
 assignments.post('/:id/signals', async (c) => {
   const assignmentId = c.req.param('id');
@@ -173,12 +173,9 @@ assignments.post('/:id/signals', async (c) => {
     studentId: number;
     signals: {
       questionId: number;
-      dwellMs: number;
+      hesitations: { timestamp: number; duration: number; after: 'typing' | 'drawing' | 'idle' }[];
       deleteCount: number;
-      pauseCount: number;
-      revisitCount: number;
       answerChanges: number;
-      struggles: string[];
     }[];
   }>();
 

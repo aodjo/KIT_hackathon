@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
@@ -842,6 +842,9 @@ export default function StudentAssignment() {
   const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Hesitation count for UI update */
   const [hesitationCounts, setHesitationCounts] = useState<Record<number, number>>({});
+  /** Hidden-question inference request state per question */
+  const whisperPending = useRef<Record<number, boolean>>({});
+  const whisperLastSentKey = useRef<Record<number, string>>({});
 
   /** Fetch assignment info */
   useEffect(() => {
@@ -861,6 +864,85 @@ export default function StudentAssignment() {
 
   /** Current question */
   const q = questions[currentIdx];
+
+  /**
+   * Normalize the expected answer for comparison.
+   *
+   * @param question assignment question
+   * @return normalized answer string
+   */
+  const getCorrectAnswer = (question: Question) => {
+    let correctAnswer = question.answer;
+    try {
+      const parsed = JSON.parse(question.answer);
+      if (Array.isArray(parsed) && parsed.length > 0) correctAnswer = String(parsed[0]);
+    } catch { /* not JSON */ }
+    return correctAnswer.trim();
+  };
+
+  /**
+   * Decide whether hidden-question analysis is worth sending.
+   *
+   * @param isCorrect whether the answer was correct
+   * @param sig signal bundle for the question
+   * @return true if the signal is meaningful
+   */
+  const shouldSendWhisper = (
+    isCorrect: boolean,
+    sig: { hesitations: Hesitation[]; deleteCount: number; answerChanges: number },
+  ) => !isCorrect || sig.hesitations.length > 0 || sig.deleteCount > 0 || sig.answerChanges > 0;
+
+  /**
+   * Send hidden-question analysis once per question unless the previous attempt failed.
+   *
+   * @param question current question
+   * @param studentAnswer student's submitted answer
+   * @param isCorrect whether the answer was correct
+   * @return void
+   */
+  const sendWhisperAnalysis = (question: Question, studentAnswer: string, isCorrect: boolean) => {
+    if (!user || !id) return;
+    const sig = getSignal(question.id);
+    if (!shouldSendWhisper(isCorrect, sig)) return;
+    const requestKey = JSON.stringify({
+      studentAnswer,
+      isCorrect,
+      hesitations: sig.hesitations.length,
+      deleteCount: sig.deleteCount,
+      answerChanges: sig.answerChanges,
+    });
+    if (whisperPending.current[question.id] || whisperLastSentKey.current[question.id] === requestKey) return;
+
+    whisperPending.current[question.id] = true;
+
+    fetch(`${API}/api/whisper/infer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentId: user.id,
+        assignmentId: id,
+        questionId: question.id,
+        questionText: question.question,
+        questionAnswer: getCorrectAnswer(question),
+        studentAnswer,
+        isCorrect,
+        workText: workText[question.id] ?? '',
+        signals: {
+          hesitations: sig.hesitations,
+          deleteCount: sig.deleteCount,
+          answerChanges: sig.answerChanges,
+        },
+      }),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.analysis) whisperLastSentKey.current[question.id] = requestKey;
+      })
+      .catch(() => {})
+      .finally(() => {
+        whisperPending.current[question.id] = false;
+      });
+  };
 
   /**
    * Get or init signal data for a question.
@@ -923,6 +1005,7 @@ export default function StudentAssignment() {
   useEffect(() => {
     wasActive.current = false;
     lastInput.current = { time: 0, type: 'idle' };
+    if (pauseTimer.current) clearTimeout(pauseTimer.current);
   }, [currentIdx]);
 
   /**
@@ -935,8 +1018,19 @@ export default function StudentAssignment() {
     if (!q) return;
     const sig = getSignal(q.id);
     const prev = answers[q.id] ?? '';
+    const prevTrimmed = prev.trim();
+    const nextTrimmed = value.trim();
     /** Count full rewrites: had a real answer, then cleared most of it */
     if (prev.length >= 3 && value.length < prev.length * 0.3) sig.deleteCount++;
+    if (
+      prevTrimmed.length >= 2
+      && nextTrimmed.length >= 2
+      && prevTrimmed !== nextTrimmed
+      && !prevTrimmed.startsWith(nextTrimmed)
+      && !nextTrimmed.startsWith(prevTrimmed)
+    ) {
+      sig.answerChanges++;
+    }
     recordInput('typing');
     setAnswers((p) => ({ ...p, [q.id]: value }));
   };
@@ -949,15 +1043,11 @@ export default function StudentAssignment() {
   const submitCurrentQuestion = () => {
     if (!q) return;
     const myAnswer = answers[q.id]?.trim() ?? '';
-    let correctAnswer = q.answer;
-    try {
-      const parsed = JSON.parse(q.answer);
-      if (Array.isArray(parsed)) correctAnswer = parsed[0];
-    } catch { /* not JSON */ }
-    const isCorrect = myAnswer === correctAnswer.trim();
-    const sig = getSignal(q.id);
+    const correctAnswer = getCorrectAnswer(q);
+    const isCorrect = myAnswer === correctAnswer;
 
     if (!isCorrect) {
+      sendWhisperAnalysis(q, myAnswer, false);
       /** Wrong → retry */
       setAttempts((prev) => ({ ...prev, [q.id]: (prev[q.id] ?? 0) + 1 }));
       setPhase('wrong');
@@ -978,23 +1068,7 @@ export default function StudentAssignment() {
     setPhase('mirror');
 
     /** Send behavior signals to Whisper for teacher analysis */
-    if (user && (sig.hesitations.length > 0 || sig.deleteCount >= 2)) {
-      fetch(`${API}/api/whisper/infer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: user.id,
-          assignmentId: id,
-          questionId: q.id,
-          questionText: q.question,
-          questionAnswer: correctAnswer,
-          studentAnswer: myAnswer,
-          isCorrect: true,
-          workText: workText[q.id] ?? '',
-          signals: { hesitations: sig.hesitations, deleteCount: sig.deleteCount, answerChanges: 0 },
-        }),
-      }).catch(() => {});
-    }
+    sendWhisperAnalysis(q, myAnswer, true);
   };
 
   /**
@@ -1121,6 +1195,11 @@ export default function StudentAssignment() {
       });
       const data = await res.json();
       setFinalResult(data);
+
+      questions.forEach((question) => {
+        const answer = answers[question.id]?.trim() ?? '';
+        sendWhisperAnalysis(question, answer, answer === getCorrectAnswer(question));
+      });
 
       /** Send behavior signals to server */
       const signalData = questions.map((q) => {

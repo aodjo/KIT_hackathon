@@ -105,10 +105,16 @@ export default function AssignmentDetail() {
   /** Fetch hidden questions from Whisper */
   useEffect(() => {
     if (!id) return;
-    fetch(`${API}/api/whisper/assignment/${id}`)
-      .then((r) => r.json())
-      .then((d) => setAnalyses(d.analyses ?? []))
-      .catch(() => {});
+    const load = () => {
+      fetch(`${API}/api/whisper/assignment/${id}`)
+        .then((r) => r.json())
+        .then((d) => setAnalyses(d.analyses ?? []))
+        .catch(() => {});
+    };
+
+    load();
+    const timer = window.setInterval(load, 10000);
+    return () => window.clearInterval(timer);
   }, [id]);
 
   if (!assignment) {
