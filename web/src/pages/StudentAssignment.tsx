@@ -1130,7 +1130,7 @@ export default function StudentAssignment() {
   const currentTeacherHelpRequested = q ? !!teacherHelpRequested[q.id] : false;
   const currentAdvanceApproved = q ? !!advanceApproved[q.id] || !!teacherHelpRequested[q.id] : false;
   const currentReviewLocked = currentAdvanceApproved;
-  const currentAnswerEditable = phase !== 'mirror';
+  const currentAnswerEditable = phase !== 'mirror' && !currentAdvanceApproved;
 
   /**
    * Check whether a target question is accessible.
@@ -1405,6 +1405,8 @@ export default function StudentAssignment() {
    */
   /** Chat loading state */
   const [chatLoading, setChatLoading] = useState(false);
+  /** Manual teacher-help request state */
+  const [teacherHelpLoading, setTeacherHelpLoading] = useState(false);
 
   /**
    * Send message to MirrorMind (past-self AI).
@@ -1467,6 +1469,46 @@ export default function StudentAssignment() {
       }));
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  /**
+   * Defer the current problem and notify the teacher.
+   *
+   * @return void
+   */
+  const requestTeacherHelp = async () => {
+    if (!user || !q || teacherHelpLoading || currentAdvanceApproved) return;
+
+    setTeacherHelpLoading(true);
+    try {
+      const res = await fetch(`${API}/api/mirror/request-teacher-help`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: user.id,
+          assignmentId: id,
+          questionId: q.id,
+          conceptId: q.concept_id,
+          studentAnswer: answers[q.id]?.trim() ?? '',
+          workText: workText[q.id] ?? '',
+          messages: (chatMessages[q.id] ?? []).map((message) => ({
+            role: message.role === 'ai' ? 'assistant' : 'user',
+            content: message.content,
+          })),
+          attempts: attempts[q.id] ?? 0,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error ?? '선생님 도움 요청 중 오류가 발생했습니다.');
+      }
+
+      setTeacherHelpRequested((prev) => ({ ...prev, [q.id]: true }));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '선생님 도움 요청 중 오류가 발생했습니다.');
+    } finally {
+      setTeacherHelpLoading(false);
     }
   };
 
@@ -1724,11 +1766,24 @@ export default function StudentAssignment() {
             </div>
 
             {/* wrong phase: retry prompt */}
-            {phase === 'wrong' && q && (
+            {phase === 'wrong' && q && !currentTeacherHelpRequested && (
               <div className="mt-6 border-t border-grain pt-6">
                 <div className="rounded-lg p-4 bg-red-50 border border-red-200">
                   <p className="text-[15px] font-medium text-ink">
                     오답입니다. {(attempts[q.id] ?? 0) > 1 ? `(${attempts[q.id]}번째 시도)` : ''} 다시 풀어보세요.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {currentTeacherHelpRequested && phase !== 'mirror' && (
+              <div className="mt-6 border-t border-grain pt-6">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-[15px] font-medium text-ink">
+                    선생님께 도움 요청을 남기고 이 문제를 보류했습니다.
+                  </p>
+                  <p className="mt-1 text-[13px] text-amber-800">
+                    지금은 답안과 풀이를 수정할 수 없고, 다음 단계로 진행할 수 있습니다.
                   </p>
                 </div>
               </div>
@@ -1809,31 +1864,59 @@ export default function StudentAssignment() {
               >
                 ← 이전
               </button>
-              {phase !== 'mirror' ? (
-                <button
-                  onClick={submitCurrentQuestion}
-                  disabled={!currentAnswered}
-                  className="h-11 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  {phase === 'wrong' ? '다시 제출' : '제출'}
-                </button>
-              ) : isLast ? (
-                <button
-                  onClick={handleFinalSubmit}
-                  disabled={submitting || !currentAdvanceApproved}
-                  className="h-11 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  {submitting ? '제출 중...' : '최종 제출'}
-                </button>
-              ) : (
-                <button
-                  onClick={goNext}
-                  disabled={!currentAdvanceApproved}
-                  className="h-11 px-5 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  다음 문제 →
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {!currentAdvanceApproved && (
+                  <button
+                    onClick={requestTeacherHelp}
+                    disabled={teacherHelpLoading || chatLoading}
+                    className="h-11 px-5 rounded-full border border-grain bg-paper text-[14px] font-medium text-ink hover:border-ink/40 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    {teacherHelpLoading ? '요청 중...' : '보류 후 도움 요청'}
+                  </button>
+                )}
+                {currentAdvanceApproved ? (
+                  isLast ? (
+                    <button
+                      onClick={handleFinalSubmit}
+                      disabled={submitting}
+                      className="h-11 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      {submitting ? '제출 중...' : '최종 제출'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={goNext}
+                      className="h-11 px-5 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer"
+                    >
+                      다음 문제 →
+                    </button>
+                  )
+                ) : phase !== 'mirror' ? (
+                  <button
+                    onClick={submitCurrentQuestion}
+                    disabled={!currentAnswered}
+                    className="h-11 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    {phase === 'wrong' ? '다시 제출' : '제출'}
+                  </button>
+                ) : isLast ? (
+                  <button
+                    onClick={handleFinalSubmit}
+                    disabled={submitting || !currentAdvanceApproved}
+                    className="h-11 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? '제출 중...' : '최종 제출'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={goNext}
+                    disabled={!currentAdvanceApproved}
+                    className="h-11 px-5 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    다음 문제 →
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ) : (

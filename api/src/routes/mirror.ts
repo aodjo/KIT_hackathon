@@ -28,6 +28,17 @@ type MirrorChatRequest = {
   messages: { role: string; content: string }[];
 };
 
+type ManualTeacherHelpRequest = {
+  studentId?: number;
+  assignmentId?: string;
+  questionId?: number;
+  conceptId?: string;
+  studentAnswer?: string;
+  workText?: string;
+  messages?: { role: string; content: string }[];
+  attempts?: number;
+};
+
 type LearningAnalysisUpdate = {
   stuck_point: string;
   missing_concept_ids: string[];
@@ -496,6 +507,174 @@ ${existingAnalysisText}`,
       error: String(e),
     });
   }
+});
+
+/**
+ * POST /api/mirror/request-teacher-help
+ * Manually defer the current question and notify the teacher.
+ */
+mirror.post('/request-teacher-help', async (c) => {
+  const {
+    studentId,
+    assignmentId,
+    questionId,
+    conceptId,
+    studentAnswer,
+    workText,
+    messages = [],
+    attempts = 0,
+  } = await c.req.json<ManualTeacherHelpRequest>();
+
+  if (studentId == null || !assignmentId || questionId == null) {
+    return c.json({ error: 'Missing assignment identifiers.' }, 400);
+  }
+
+  const existingLock = await getQuestionResolutionLock(c.env.DB, studentId, assignmentId, questionId);
+  if (existingLock) {
+    if (existingLock.teacherHelpRequested) {
+      return c.json({
+        ok: true,
+        teacherHelpRequested: true,
+        reply: '이미 선생님께 도움 요청을 남겼습니다. 이 문제는 보류 상태입니다.',
+      });
+    }
+
+    return c.json({
+      error: 'This question is already resolved.',
+      teacherHelpRequested: false,
+    }, 409);
+  }
+
+  const currentConcept = getCurriculumConcept(conceptId);
+  const conceptPath = getCurriculumConceptLineage(conceptId);
+  const conceptCandidates = new Map(conceptPath.map((concept) => [concept.id, concept]));
+
+  let existingAnalysisPayload: Record<string, unknown> | null = null;
+  const existingAnalysis = await c.env.DB.prepare(
+    `SELECT payload
+     FROM behavior_signals
+     WHERE student_id = ?
+       AND type = 'stuck_analysis'
+       AND json_extract(payload, '$.assignment_id') = ?
+       AND json_extract(payload, '$.question_id') = ?
+     ORDER BY created_at DESC
+     LIMIT 1`,
+  ).bind(studentId, assignmentId, questionId).first<{ payload: string }>();
+
+  if (existingAnalysis?.payload) {
+    try {
+      existingAnalysisPayload = JSON.parse(existingAnalysis.payload) as Record<string, unknown>;
+    } catch {
+      existingAnalysisPayload = null;
+    }
+  }
+
+  const baseMissingIds = Array.isArray(existingAnalysisPayload?.missing_concept_ids)
+    ? (existingAnalysisPayload.missing_concept_ids as unknown[])
+      .map((item) => String(item ?? '').trim())
+      .filter(Boolean)
+      .slice(0, 3)
+    : conceptPath.slice(-3).map((concept) => concept.id);
+  const missingConceptIds = Array.from(new Set(baseMissingIds)).slice(0, 3);
+  const missingConcepts = missingConceptIds
+    .map((id) => conceptCandidates.get(id))
+    .filter((concept): concept is CurriculumConcept => concept != null)
+    .map((concept) => formatCurriculumConceptLabel(concept));
+  const stuckPoint = typeof existingAnalysisPayload?.stuck_point === 'string' && existingAnalysisPayload.stuck_point.trim()
+    ? existingAnalysisPayload.stuck_point.trim()
+    : attempts > 0
+      ? '학생이 오답 이후에도 스스로 풀이를 이어가지 못해 현재 문제를 보류했습니다.'
+      : '학생이 현재 문제를 스스로 해결하기 어렵다고 판단해 보류를 요청했습니다.';
+  const recommendedPractice = typeof existingAnalysisPayload?.recommended_practice === 'string' && existingAnalysisPayload.recommended_practice.trim()
+    ? existingAnalysisPayload.recommended_practice.trim()
+    : '현재 문제의 핵심 조건과 필요한 개념을 다시 짚은 뒤, 같은 유형의 짧은 유사 문항으로 연결';
+  const existingConfidence = Number(existingAnalysisPayload?.confidence);
+  const confidence = Number.isFinite(existingConfidence)
+    ? Math.max(0.72, Math.min(1, existingConfidence))
+    : 0.72;
+  const teacherNoticeReason = '학생이 직접 문제를 보류하고 선생님 도움을 요청했습니다.';
+
+  await c.env.DB.prepare(
+    `DELETE FROM behavior_signals
+     WHERE student_id = ?
+       AND type = 'stuck_analysis'
+       AND json_extract(payload, '$.assignment_id') = ?
+       AND json_extract(payload, '$.question_id') = ?`,
+  )
+    .bind(studentId, assignmentId, questionId)
+    .run();
+
+  await c.env.DB.prepare(
+    `INSERT INTO behavior_signals (student_id, type, payload)
+     VALUES (?, 'stuck_analysis', ?)`,
+  ).bind(
+    studentId,
+    JSON.stringify({
+      assignment_id: assignmentId,
+      question_id: questionId,
+      concept_id: conceptId ?? existingAnalysisPayload?.concept_id ?? null,
+      current_concept: currentConcept ?? existingAnalysisPayload?.current_concept ?? null,
+      candidate_concepts: conceptPath.length > 0
+        ? conceptPath
+        : Array.isArray(existingAnalysisPayload?.candidate_concepts)
+          ? existingAnalysisPayload.candidate_concepts
+          : [],
+      stuck_point: stuckPoint,
+      missing_concept_ids: missingConceptIds,
+      missing_concepts: missingConcepts,
+      recommended_practice: recommendedPractice,
+      confidence,
+      source: 'manual_teacher_help',
+      revision_reason: teacherNoticeReason,
+      teacher_notice_requested: true,
+      teacher_notice_reason: teacherNoticeReason,
+      teacher_notice_requested_at: new Date().toISOString(),
+      signals: existingAnalysisPayload?.signals ?? null,
+    }),
+  ).run();
+
+  await saveQuestionResolutionLock(c.env.DB, {
+    studentId,
+    assignmentId,
+    questionId,
+    conceptId: conceptId ?? null,
+    status: 'teacher_help',
+    reason: teacherNoticeReason,
+    studentAnswer: studentAnswer ?? '',
+    workText: workText ?? '',
+  });
+
+  const transcript = buildTranscript(messages, '');
+  if (transcript.length > 0) {
+    await c.env.DB.prepare(
+      `DELETE FROM behavior_signals
+       WHERE student_id = ?
+         AND type = 'mirror_chat'
+         AND json_extract(payload, '$.assignment_id') = ?
+         AND json_extract(payload, '$.question_id') = ?`,
+    )
+      .bind(studentId, assignmentId, questionId)
+      .run();
+
+    await c.env.DB.prepare(
+      `INSERT INTO behavior_signals (student_id, type, payload)
+       VALUES (?, 'mirror_chat', ?)`,
+    ).bind(
+      studentId,
+      JSON.stringify({
+        assignment_id: assignmentId,
+        question_id: questionId,
+        concept_id: conceptId ?? null,
+        messages: transcript,
+      }),
+    ).run();
+  }
+
+  return c.json({
+    ok: true,
+    teacherHelpRequested: true,
+    reply: '선생님께 도움 요청을 남겼습니다. 이 문제는 보류하고 다음 문제로 넘어갈 수 있습니다.',
+  });
 });
 
 /**

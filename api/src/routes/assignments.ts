@@ -221,8 +221,8 @@ assignments.post('/:id/submit-answers', async (c) => {
     const existingLock = await getQuestionResolutionLock(c.env.DB, studentId, id, answer.questionId);
     if (!existingLock) continue;
 
-    const lockedAnswer = existingLock.studentAnswer?.trim();
-    if (lockedAnswer == null || answer.answer.trim() !== lockedAnswer) {
+    const lockedAnswer = existingLock.studentAnswer?.trim() ?? '';
+    if (answer.answer.trim() !== lockedAnswer) {
       lockedConflicts.push(answer.questionId);
     }
   }
