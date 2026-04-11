@@ -12,6 +12,23 @@ import {
 /** API base URL */
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
 
+/**
+ * Read an API response as JSON when possible, with plain-text fallback.
+ *
+ * @param res fetch response
+ * @return parsed payload or null
+ */
+async function readApiPayload(res: Response): Promise<Record<string, unknown> | null> {
+  const text = await res.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { error: text };
+  }
+}
+
 /** Question record */
 type Question = {
   id: number;
@@ -1236,7 +1253,7 @@ export default function StudentAssignment() {
       }),
     })
       .then(async (res) => {
-        const data = await res.json().catch(() => null);
+        const data = await readApiPayload(res);
         if (res.ok && data?.analysis) whisperLastSentKey.current[question.id] = requestKey;
       })
       .catch(() => {})
@@ -1443,12 +1460,17 @@ export default function StudentAssignment() {
           messages: withStudent.map((m) => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })),
         }),
       });
-      const data = await res.json();
-      const aiReply = data.reply ?? '음... 잘 모르겠어. 좀 더 쉽게 설명해줄 수 있어?';
-      if (data.allowNextQuestion) {
+      const data = await readApiPayload(res);
+      if (!res.ok) {
+        throw new Error(typeof data?.error === 'string' ? data.error : '설명 대화 중 오류가 발생했습니다.');
+      }
+      const aiReply = typeof data?.reply === 'string'
+        ? data.reply
+        : '음... 잘 모르겠어. 좀 더 쉽게 설명해줄 수 있어?';
+      if (data?.allowNextQuestion === true) {
         setAdvanceApproved((prev) => ({ ...prev, [questionId]: true }));
       }
-      if (data.teacherHelpRequested) {
+      if (data?.teacherHelpRequested === true) {
         setTeacherHelpRequested((prev) => ({ ...prev, [questionId]: true }));
       }
       setChatMessages((prev) => ({
@@ -1500,9 +1522,9 @@ export default function StudentAssignment() {
           attempts: attempts[q.id] ?? 0,
         }),
       });
-      const data = await res.json().catch(() => null);
+      const data = await readApiPayload(res);
       if (!res.ok) {
-        throw new Error(data?.error ?? '선생님 도움 요청 중 오류가 발생했습니다.');
+        throw new Error(typeof data?.error === 'string' ? data.error : '선생님 도움 요청 중 오류가 발생했습니다.');
       }
 
       setTeacherHelpRequested((prev) => ({ ...prev, [q.id]: true }));
@@ -1553,14 +1575,20 @@ export default function StudentAssignment() {
           })),
         }),
       });
-      const data = await res.json();
+      const data = await readApiPayload(res);
       if (!res.ok) {
         const lockedIds = Array.isArray(data?.questionIds) ? data.questionIds.join(', ') : null;
         throw new Error(lockedIds
           ? `잠긴 문제의 답안을 수정할 수 없습니다. 문제 번호: ${lockedIds}`
-          : '제출할 수 없는 답안 변경이 감지되었습니다.');
+          : typeof data?.error === 'string'
+            ? data.error
+            : '제출 처리 중 오류가 발생했습니다.');
       }
-      setFinalResult(data);
+      if (typeof data?.correct !== 'number' || typeof data?.total !== 'number') {
+        throw new Error('제출 응답 형식이 올바르지 않습니다.');
+      }
+
+      setFinalResult({ correct: data.correct, total: data.total });
 
       questions.forEach((question) => {
         const answer = answers[question.id]?.trim() ?? '';
