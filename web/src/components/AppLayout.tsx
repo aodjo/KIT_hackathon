@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
+import Footer from './Footer';
 import { getStoredUser } from '../lib/auth';
 
 /** API base URL */
@@ -244,6 +245,7 @@ export default function AppLayout({
         {/* main content */}
         <main className="flex-1">{children}</main>
       </div>
+      <Footer />
 
       {/* create / join class modal */}
       {showCreate && (
