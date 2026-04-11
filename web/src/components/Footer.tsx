@@ -49,7 +49,7 @@ export default function Footer() {
               </div>
               <ul className="mt-4 space-y-2.5 text-[13px] text-ink-muted">
                 <li>
-                  <Link to="/articles/what-is-protege-effect-234567" className="hover:text-ink transition-colors">
+                  <Link to="/articles" className="hover:text-ink transition-colors">
                     전체 보기
                   </Link>
                 </li>
