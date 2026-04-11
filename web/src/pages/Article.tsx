@@ -44,7 +44,10 @@ export default function Article() {
       <main>
         <article className="mx-auto max-w-5xl px-6 lg:px-10 py-20 lg:py-28">
           <div className="mb-12 pb-12 border-b border-grain">
-            <nav className="flex items-center gap-2 text-[11px] text-ink-muted font-mono overflow-hidden" aria-label="breadcrumb">
+            <nav
+              className="flex items-center gap-2 overflow-hidden text-[10px] uppercase tracking-[0.14em] font-medium font-mono text-clay-deep"
+              aria-label="breadcrumb"
+            >
               <Link to="/articles" className="hover:text-ink transition-colors shrink-0">Articles</Link>
               <span className="opacity-50 shrink-0">/</span>
               <Link to={`/articles/date/${article.date}`} className="hover:text-ink transition-colors shrink-0">
