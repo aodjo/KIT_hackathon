@@ -49,18 +49,13 @@ export default function Footer() {
               </div>
               <ul className="mt-4 space-y-2.5 text-[13px] text-ink-muted">
                 <li>
+                  <Link to="/articles/what-is-protege-effect-234567" className="hover:text-ink transition-colors">
+                    전체 보기
+                  </Link>
+                </li>
+                <li>
                   <Link to="/articles/how-does-echo-works-123983" className="hover:text-ink transition-colors">
                     작동 방법
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/articles/what-is-protege-effect-234567" className="hover:text-ink transition-colors">
-                    Protégé Effect
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/articles/what-does-learning-analysis-percentage-mean-345678" className="hover:text-ink transition-colors">
-                    분석 퍼센트
                   </Link>
                 </li>
               </ul>
@@ -72,12 +67,12 @@ export default function Footer() {
               </div>
               <ul className="mt-4 space-y-2.5 text-[13px] text-ink-muted">
                 <li>
-                  <a href="mailto:hello@echo.kit" className="hover:text-ink transition-colors">
+                  <a href="mailto:me@junx.dev" className="hover:text-ink transition-colors">
                     이메일
                   </a>
                 </li>
                 <li>
-                  <a href="https://github.com" className="hover:text-ink transition-colors">
+                  <a href="https://github.com/aodjo/KIT_hackathon" className="hover:text-ink transition-colors">
                     GitHub
                   </a>
                 </li>
