@@ -1623,6 +1623,14 @@ export default function StudentAssignment() {
   const isLast = currentIdx === questions.length - 1;
   /** Answered count */
   const answeredCount = questions.filter((q) => answers[q.id]?.trim()).length;
+  /** Final result summary */
+  const finalSummary = finalResult
+    ? {
+      perfect: finalResult.correct === finalResult.total,
+      wrong: Math.max(finalResult.total - finalResult.correct, 0),
+      accuracy: finalResult.total > 0 ? Math.round((finalResult.correct / finalResult.total) * 100) : 0,
+    }
+    : null;
 
   if (!user) return null;
 
@@ -1644,8 +1652,15 @@ export default function StudentAssignment() {
           <h1 className="font-display text-[28px] text-ink">{title}</h1>
           <div className="flex items-center justify-between mt-2">
             <p className="text-[12px] text-ink-muted font-mono">
-              {answeredCount}/{questions.length}문제 작성
+              {finalSummary
+                ? '최종 제출 완료'
+                : `${answeredCount}/${questions.length}문제 작성`}
             </p>
+            {finalSummary && (
+              <span className="inline-flex items-center rounded-full border border-grain bg-paper px-3 py-1 text-[11px] font-mono text-ink-muted">
+                정답률 {finalSummary.accuracy}%
+              </span>
+            )}
           </div>
           {/* question dots */}
           {questions.length > 0 && !finalResult && (
@@ -1684,27 +1699,83 @@ export default function StudentAssignment() {
 
         {/* final result */}
         {finalResult ? (
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <div className={`rounded-2xl p-10 border text-center ${
-              finalResult.correct === finalResult.total
-                ? 'bg-emerald-50 border-emerald-200'
-                : 'bg-paper border-grain'
-            }`}>
-              <p className="text-[48px] font-display text-ink mb-2">
-                {finalResult.correct}/{finalResult.total}
-              </p>
-              <p className="text-[16px] text-ink-muted">
-                {finalResult.correct === finalResult.total
-                  ? '모두 정답입니다!'
-                  : `${finalResult.total}문제 중 ${finalResult.correct}문제 정답`}
-              </p>
+          <div className="flex-1 flex items-center">
+            <div className="relative w-full overflow-hidden rounded-[28px] border border-grain bg-paper shadow-paper-lg">
+              <div
+                className="absolute inset-x-0 top-0 h-28 opacity-80"
+                style={{
+                  background: finalSummary?.perfect
+                    ? 'linear-gradient(180deg, rgba(33,115,70,0.12), rgba(33,115,70,0))'
+                    : 'linear-gradient(180deg, rgba(107,84,53,0.12), rgba(107,84,53,0))',
+                }}
+              />
+              <div className="relative p-7 sm:p-9">
+                <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+                    <div
+                      className="relative h-40 w-40 shrink-0 rounded-full"
+                      style={{
+                        background: `conic-gradient(${
+                          finalSummary?.perfect ? '#217346' : '#6B5435'
+                        } 0deg ${((finalSummary?.accuracy ?? 0) / 100) * 360}deg, rgba(10,10,10,0.08) ${((finalSummary?.accuracy ?? 0) / 100) * 360}deg 360deg)`,
+                      }}
+                    >
+                      <div className="absolute inset-[10px] flex flex-col items-center justify-center rounded-full border border-grain bg-paper">
+                        <span className="text-[11px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">
+                          Accuracy
+                        </span>
+                        <span className="mt-2 font-display text-[42px] leading-none text-ink">
+                          {finalSummary?.accuracy}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="max-w-md">
+                      <span className="inline-flex items-center rounded-full border border-grain bg-paper px-3 py-1 text-[11px] font-mono text-ink-muted">
+                        제출 완료
+                      </span>
+                      <h2 className="mt-4 font-display text-[34px] leading-[1.08] tracking-tight-display text-ink sm:text-[40px]">
+                        {finalSummary?.perfect
+                          ? '전 문제를 정확히 마쳤습니다.'
+                          : '과제 제출이 완료되었습니다.'}
+                      </h2>
+                      <p className="mt-3 text-[15px] leading-[1.7] text-ink-muted">
+                        {finalSummary?.perfect
+                          ? `${finalResult.total}문제를 모두 맞히고 제출했습니다.`
+                          : `${finalResult.total}문제 중 ${finalResult.correct}문제를 맞혔고, ${finalSummary?.wrong}문제는 다시 확인이 필요합니다.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:min-w-[300px]">
+                    <div className="rounded-2xl border border-grain bg-paper px-4 py-5 text-center">
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-muted font-mono">총 문제</p>
+                      <p className="mt-3 font-display text-[34px] leading-none text-ink">{finalResult.total}</p>
+                    </div>
+                    <div className="rounded-2xl border border-grain bg-paper px-4 py-5 text-center">
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-muted font-mono">정답</p>
+                      <p className="mt-3 font-display text-[34px] leading-none text-ink">{finalResult.correct}</p>
+                    </div>
+                    <div className="rounded-2xl border border-grain bg-paper px-4 py-5 text-center">
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-muted font-mono">오답</p>
+                      <p className="mt-3 font-display text-[34px] leading-none text-ink">{finalSummary?.wrong}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 flex flex-col gap-3 border-t border-grain pt-6 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[13px] leading-[1.7] text-ink-muted">
+                    제출 결과와 풀이 흔적은 저장되었으며, 선생님 화면에서 학습 분석과 함께 확인할 수 있습니다.
+                  </p>
+                  <button
+                    onClick={() => navigate(`/c/${classId}`)}
+                    className="h-11 shrink-0 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer"
+                  >
+                    돌아가기
+                  </button>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={() => navigate(`/c/${classId}`)}
-              className="mt-8 h-11 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer"
-            >
-              돌아가기
-            </button>
           </div>
         ) : q ? (
           <div className="flex-1 flex flex-col">
