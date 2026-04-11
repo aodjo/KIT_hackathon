@@ -1129,7 +1129,8 @@ export default function StudentAssignment() {
   /** Whether the current question is cleared for progression */
   const currentTeacherHelpRequested = q ? !!teacherHelpRequested[q.id] : false;
   const currentAdvanceApproved = q ? !!advanceApproved[q.id] || !!teacherHelpRequested[q.id] : false;
-  const currentReviewLocked = currentAdvanceApproved;
+  const currentChatLocked = currentAdvanceApproved;
+  const currentCanvasLocked = currentAdvanceApproved || phase === 'mirror';
   const currentAnswerEditable = phase !== 'mirror' && !currentAdvanceApproved;
 
   /**
@@ -1751,13 +1752,15 @@ export default function StudentAssignment() {
                       penSize={canvasPenSize}
                       setPenSize={setCanvasPenSize}
                       onExpand={openFullscreen}
-                      readOnly={currentReviewLocked}
+                      readOnly={currentCanvasLocked}
                     />
-                    {currentReviewLocked && (
+                    {currentCanvasLocked && (
                       <p className="mt-2 text-[12px] text-ink-muted">
                         {currentTeacherHelpRequested
                           ? '선생님 도움 요청으로 문제 풀이가 종료되어 풀이과정은 읽기 전용입니다.'
-                          : '과거의 내가 이해를 완료해 풀이과정은 더 이상 수정할 수 없습니다.'}
+                          : phase === 'mirror' && !currentAdvanceApproved
+                            ? '정답이 확인되어 풀이과정은 더 이상 수정할 수 없습니다.'
+                            : '과거의 내가 이해를 완료해 풀이과정은 더 이상 수정할 수 없습니다.'}
                       </p>
                     )}
                   </>
@@ -1826,20 +1829,20 @@ export default function StudentAssignment() {
                     type="text"
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !chatLoading && !currentReviewLocked) sendChat(); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !chatLoading && !currentChatLocked) sendChat(); }}
                     placeholder={
                       currentTeacherHelpRequested
                         ? '선생님 도움 요청으로 대화가 종료되었습니다.'
-                        : currentReviewLocked
+                        : currentChatLocked
                           ? '문제 풀이가 완료되어 더 이상 대화할 수 없습니다.'
                           : '과거의 나에게 설명해주세요...'
                     }
-                    disabled={chatLoading || currentReviewLocked}
+                    disabled={chatLoading || currentChatLocked}
                     className="flex-1 border border-grain rounded-lg px-4 py-2.5 text-[14px] text-ink focus:outline-none focus:border-ink transition-colors disabled:bg-grain/20"
                   />
                   <button
                     onClick={sendChat}
-                    disabled={!chatInput.trim() || chatLoading || currentReviewLocked}
+                    disabled={!chatInput.trim() || chatLoading || currentChatLocked}
                     className="h-10 px-4 rounded-lg bg-ink text-paper text-[13px] font-medium cursor-pointer hover:bg-ink-soft transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     전송
@@ -2006,7 +2009,7 @@ export default function StudentAssignment() {
                 penSize={canvasPenSize}
                 setPenSize={setCanvasPenSize}
                 onCollapse={closeFullscreen}
-                readOnly={currentReviewLocked}
+                readOnly={currentCanvasLocked}
               />
             </div>
           </div>
