@@ -284,6 +284,38 @@ type Point = { x: number; y: number };
 /** Stroke data */
 type Stroke = { points: Point[]; color: string; width: number };
 
+/** Solve phase */
+type AssignmentPhase = 'answering' | 'wrong' | 'mirror';
+
+/** Hesitation moment */
+type Hesitation = { timestamp: number; duration: number; after: 'typing' | 'drawing' | 'idle' };
+
+/** Per-question signal bundle */
+type QuestionSignalState = {
+  hesitations: Hesitation[];
+  deleteCount: number;
+  answerChanges: number;
+  inputTimes: number[];
+};
+
+/** Persisted progress payload stored on the server */
+type AssignmentProgressPayload = {
+  version: 1;
+  currentIdx: number;
+  phase: AssignmentPhase;
+  answers: Record<number, string>;
+  workText: Record<number, string>;
+  workDraw: Record<number, Stroke[]>;
+  attempts: Record<number, number>;
+  results: Record<number, boolean>;
+  chatMessages: Record<number, { role: 'ai' | 'student'; content: string }[]>;
+  advanceApproved: Record<number, boolean>;
+  teacherHelpRequested: Record<number, boolean>;
+  finalResult: { correct: number; total: number } | null;
+  hesitationCounts: Record<number, number>;
+  signals: Record<number, QuestionSignalState>;
+};
+
 /**
  * Vector-based canvas with zoom, pan, undo.
  *
@@ -368,8 +400,8 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
     ctx.translate(o.x, o.y);
     ctx.scale(s, s);
 
-    /** Draw grid when zoomed */
-    if (s > 1.2) {
+    /** Draw grid at 100% and above */
+    if (s >= 1) {
       const gridSize = 20;
       ctx.strokeStyle = '#f0ede8';
       ctx.lineWidth = 0.5 / s;
@@ -414,15 +446,27 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
   };
 
   /**
-   * Fit view to stroke bounding box with padding.
+   * Center content at a specific scale without auto-fitting.
    *
+   * @param nextScale target scale
    * @return void
    */
-  const fitToContent = () => {
+  const centerContentAtScale = (nextScale: number) => {
     const container = containerRef.current;
-    if (!container || strokes.current.length === 0) return;
+    if (!container) return;
+    scaleRef.current = nextScale;
+    setScaleUI(nextScale);
+
+    if (strokes.current.length === 0) {
+      offsetRef.current = { x: 0, y: 0 };
+      return;
+    }
+
     const allPoints = strokes.current.flatMap((s) => s.points);
-    if (allPoints.length === 0) return;
+    if (allPoints.length === 0) {
+      offsetRef.current = { x: 0, y: 0 };
+      return;
+    }
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const p of allPoints) {
@@ -437,23 +481,30 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
     const ch = container.offsetHeight;
     const bw = maxX - minX + pad * 2;
     const bh = maxY - minY + pad * 2;
-    const s = Math.min(cw / bw, ch / bh, 2);
-    scaleRef.current = s;
     offsetRef.current = {
-      x: (cw - bw * s) / 2 - (minX - pad) * s,
-      y: (ch - bh * s) / 2 - (minY - pad) * s,
+      x: (cw - bw * nextScale) / 2 - (minX - pad) * nextScale,
+      y: (ch - bh * nextScale) / 2 - (minY - pad) * nextScale,
     };
-    setScaleUI(s);
   };
 
   /** Initial render + resize */
   useEffect(() => {
-    fitToContent();
+    centerContentAtScale(1);
     render();
     const obs = new ResizeObserver(() => render());
     if (containerRef.current) obs.observe(containerRef.current);
     return () => obs.disconnect();
   }, []);
+
+  /** Reflect restored strokes when async progress hydration updates props. */
+  useEffect(() => {
+    strokes.current = savedStrokes ?? [];
+    current.current = null;
+    undoStack.current = [];
+    redoStack.current = [];
+    centerContentAtScale(1);
+    render();
+  }, [savedStrokes]);
 
   /** Whether eraser removed strokes (for undo snapshot) */
   const eraserDirty = useRef(false);
@@ -639,9 +690,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
 
   /** Reset view */
   const resetView = () => {
-    scaleRef.current = 1;
-    offsetRef.current = { x: 0, y: 0 };
-    setScaleUI(1);
+    centerContentAtScale(1);
     render();
   };
 
@@ -839,7 +888,7 @@ export default function StudentAssignment() {
   /** Current question index */
   const [currentIdx, setCurrentIdx] = useState(0);
   /** Phase per question: answering → wrong (retry) → mirror (explain to past-self) */
-  const [phase, setPhase] = useState<'answering' | 'wrong' | 'mirror'>('answering');
+  const [phase, setPhase] = useState<AssignmentPhase>('answering');
   /** Wrong attempt count per question */
   const [attempts, setAttempts] = useState<Record<number, number>>({});
   /** Per-question correctness keyed by question ID */
@@ -857,15 +906,8 @@ export default function StudentAssignment() {
   /** Submitting state */
   const [submitting, setSubmitting] = useState(false);
 
-  /** Hesitation moment */
-  type Hesitation = { timestamp: number; duration: number; after: 'typing' | 'drawing' | 'idle' };
   /** Behavior signals per question */
-  const signals = useRef<Record<number, {
-    hesitations: Hesitation[];
-    deleteCount: number;
-    answerChanges: number;
-    inputTimes: number[];
-  }>>({});
+  const signals = useRef<Record<number, QuestionSignalState>>({});
   /** Last input timestamp for gap detection */
   const lastInput = useRef<{ time: number; type: 'typing' | 'drawing' | 'idle' }>({ time: 0, type: 'idle' });
   /** Whether student was recently active (at least 3 inputs in last 10s) */
@@ -879,6 +921,12 @@ export default function StudentAssignment() {
   /** Hidden-question inference request state per question */
   const whisperPending = useRef<Record<number, boolean>>({});
   const whisperLastSentKey = useRef<Record<number, string>>({});
+  /** Whether initial progress restore has completed */
+  const [progressReady, setProgressReady] = useState(false);
+  /** Debounced autosave timer */
+  const progressSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Latest payload for pagehide flush */
+  const latestProgressPayload = useRef<AssignmentProgressPayload | null>(null);
 
   /** Fetch assignment info */
   useEffect(() => {
@@ -895,6 +943,163 @@ export default function StudentAssignment() {
       .then((r) => r.json())
       .then((d) => setQuestions(d.questions ?? []));
   }, [id]);
+
+  const resetProgressState = () => {
+    setAnswers({});
+    setWorkText({});
+    setWorkDraw({});
+    setCurrentIdx(0);
+    setPhase('answering');
+    setAttempts({});
+    setResults({});
+    setChatMessages({});
+    setChatInput('');
+    setAdvanceApproved({});
+    setTeacherHelpRequested({});
+    setFinalResult(null);
+    setHesitationCounts({});
+    signals.current = {};
+  };
+
+  const buildProgressPayload = (): AssignmentProgressPayload => ({
+    version: 1,
+    currentIdx,
+    phase,
+    answers,
+    workText,
+    workDraw,
+    attempts,
+    results,
+    chatMessages,
+    advanceApproved,
+    teacherHelpRequested,
+    finalResult,
+    hesitationCounts,
+    signals: signals.current,
+  });
+
+  const persistProgress = (payload: AssignmentProgressPayload, keepalive = false) => {
+    if (!id || !user) return Promise.resolve();
+    return fetch(`${API}/api/assignments/${id}/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentId: user.id,
+        progress: payload,
+      }),
+      keepalive,
+    }).catch(() => {});
+  };
+
+  /** Restore in-progress state from the server on load. */
+  useEffect(() => {
+    if (!id || !user) return;
+
+    setProgressReady(false);
+    latestProgressPayload.current = null;
+    if (progressSaveTimer.current) clearTimeout(progressSaveTimer.current);
+    resetProgressState();
+
+    let cancelled = false;
+    fetch(`${API}/api/assignments/${id}/progress/${user.id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled || !data?.progress) return;
+        const progress = data.progress as Partial<AssignmentProgressPayload>;
+        setAnswers(progress.answers ?? {});
+        setWorkText(progress.workText ?? {});
+        setWorkDraw(progress.workDraw ?? {});
+        setCurrentIdx(typeof progress.currentIdx === 'number' ? progress.currentIdx : 0);
+        setPhase(
+          progress.phase === 'wrong' || progress.phase === 'mirror' || progress.phase === 'answering'
+            ? progress.phase
+            : 'answering',
+        );
+        setAttempts(progress.attempts ?? {});
+        setResults(progress.results ?? {});
+        setChatMessages(progress.chatMessages ?? {});
+        setAdvanceApproved(progress.advanceApproved ?? {});
+        setTeacherHelpRequested(progress.teacherHelpRequested ?? {});
+        setFinalResult(progress.finalResult ?? null);
+        setHesitationCounts(progress.hesitationCounts ?? {});
+        signals.current = progress.signals ?? {};
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setProgressReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, user?.id]);
+
+  /** Clamp restored index once question metadata is known. */
+  useEffect(() => {
+    if (questions.length === 0) return;
+    setCurrentIdx((prev) => Math.max(0, Math.min(prev, questions.length - 1)));
+  }, [questions.length]);
+
+  /** Autosave progress to the server after local state changes. */
+  useEffect(() => {
+    if (!id || !user || !progressReady) return;
+    const payload = buildProgressPayload();
+    latestProgressPayload.current = payload;
+    if (progressSaveTimer.current) clearTimeout(progressSaveTimer.current);
+    progressSaveTimer.current = setTimeout(() => {
+      void persistProgress(payload);
+    }, 80);
+
+    return () => {
+      if (progressSaveTimer.current) clearTimeout(progressSaveTimer.current);
+    };
+  }, [
+    id,
+    user?.id,
+    progressReady,
+    currentIdx,
+    phase,
+    answers,
+    workText,
+    workDraw,
+    attempts,
+    results,
+    chatMessages,
+    advanceApproved,
+    teacherHelpRequested,
+    finalResult,
+    hesitationCounts,
+  ]);
+
+  /** Save critical checkpoint state immediately after submits/phase changes. */
+  useEffect(() => {
+    if (!id || !user || !progressReady) return;
+    const payload = buildProgressPayload();
+    latestProgressPayload.current = payload;
+    void persistProgress(payload);
+  }, [
+    id,
+    user?.id,
+    progressReady,
+    currentIdx,
+    phase,
+    attempts,
+    results,
+    advanceApproved,
+    teacherHelpRequested,
+    finalResult,
+  ]);
+
+  /** Flush the latest progress on refresh/navigation. */
+  useEffect(() => {
+    if (!id || !user) return;
+    const handlePageHide = () => {
+      if (!latestProgressPayload.current) return;
+      void persistProgress(latestProgressPayload.current, true);
+    };
+    window.addEventListener('pagehide', handlePageHide);
+    return () => window.removeEventListener('pagehide', handlePageHide);
+  }, [id, user?.id]);
 
   /** Fetch curriculum snapshots for loaded questions */
   useEffect(() => {
@@ -925,6 +1130,7 @@ export default function StudentAssignment() {
   const currentTeacherHelpRequested = q ? !!teacherHelpRequested[q.id] : false;
   const currentAdvanceApproved = q ? !!advanceApproved[q.id] || !!teacherHelpRequested[q.id] : false;
   const currentReviewLocked = currentAdvanceApproved;
+  const currentAnswerEditable = phase !== 'mirror';
 
   /**
    * Check whether a target question is accessible.
@@ -1455,11 +1661,11 @@ export default function StudentAssignment() {
                       return (
                         <button
                           key={k}
-                          onClick={() => phase === 'answering' && setAnswer(k)}
-                          className={`w-full text-left px-5 py-3 rounded-lg border transition-colors ${phase === 'answering' ? 'cursor-pointer' : ''} ${
+                          onClick={() => currentAnswerEditable && setAnswer(k)}
+                          className={`w-full text-left px-5 py-3 rounded-lg border transition-colors ${currentAnswerEditable ? 'cursor-pointer' : ''} ${
                             selected
                               ? 'border-ink bg-ink/5'
-                              : 'border-grain' + (phase === 'answering' ? ' hover:border-ink/30' : '')
+                              : 'border-grain' + (currentAnswerEditable ? ' hover:border-ink/30' : '')
                           }`}
                         >
                           <span className="text-[14px] font-mono text-ink-muted mr-3">{'①②③④⑤'[Number(k) - 1] ?? k}</span>
@@ -1474,9 +1680,9 @@ export default function StudentAssignment() {
                   type="text"
                   value={answers[q.id] ?? ''}
                   onChange={(e) => setAnswer(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && currentAnswered && phase === 'answering') submitCurrentQuestion(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && currentAnswered && currentAnswerEditable) submitCurrentQuestion(); }}
                   placeholder="답을 입력하세요"
-                  disabled={phase === 'mirror' || phase === 'wrong'}
+                  disabled={!currentAnswerEditable}
                   autoFocus
                   className="w-full border border-grain rounded-lg px-5 py-3 font-mono text-[16px] text-ink focus:outline-none focus:border-ink transition-colors disabled:bg-grain/20"
                 />
@@ -1520,17 +1726,11 @@ export default function StudentAssignment() {
             {/* wrong phase: retry prompt */}
             {phase === 'wrong' && q && (
               <div className="mt-6 border-t border-grain pt-6">
-                <div className="rounded-lg p-4 mb-4 bg-red-50 border border-red-200">
+                <div className="rounded-lg p-4 bg-red-50 border border-red-200">
                   <p className="text-[15px] font-medium text-ink">
                     오답입니다. {(attempts[q.id] ?? 0) > 1 ? `(${attempts[q.id]}번째 시도)` : ''} 다시 풀어보세요.
                   </p>
                 </div>
-                <button
-                  onClick={() => { setAnswers((p) => ({ ...p, [q.id]: '' })); setPhase('answering'); }}
-                  className="h-10 px-5 rounded-lg bg-ink text-paper text-[13px] font-medium cursor-pointer hover:bg-ink-soft transition-colors"
-                >
-                  다시 풀기
-                </button>
               </div>
             )}
 
@@ -1609,16 +1809,14 @@ export default function StudentAssignment() {
               >
                 ← 이전
               </button>
-              {phase === 'answering' ? (
+              {phase !== 'mirror' ? (
                 <button
                   onClick={submitCurrentQuestion}
                   disabled={!currentAnswered}
                   className="h-11 px-6 rounded-full bg-ink text-paper font-medium text-[14px] hover:bg-ink-soft transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  제출
+                  {phase === 'wrong' ? '다시 제출' : '제출'}
                 </button>
-              ) : phase === 'wrong' ? (
-                <div />
               ) : isLast ? (
                 <button
                   onClick={handleFinalSubmit}
@@ -1685,11 +1883,11 @@ export default function StudentAssignment() {
                       return (
                         <button
                           key={k}
-                          onClick={() => phase === 'answering' && setAnswer(k)}
+                          onClick={() => currentAnswerEditable && setAnswer(k)}
                           className={`w-full text-left px-3 py-2 rounded-lg border text-[13px] transition-colors ${
-                            phase === 'answering' ? 'cursor-pointer' : 'cursor-default'
+                            currentAnswerEditable ? 'cursor-pointer' : 'cursor-default'
                           } ${
-                            selected ? 'border-ink bg-ink/5' : 'border-grain' + (phase === 'answering' ? ' hover:border-ink/30' : '')
+                            selected ? 'border-ink bg-ink/5' : 'border-grain' + (currentAnswerEditable ? ' hover:border-ink/30' : '')
                           }`}
                         >
                           <span className="font-mono text-ink-muted mr-2">{'①②③④⑤'[Number(k) - 1] ?? k}</span>
@@ -1705,7 +1903,7 @@ export default function StudentAssignment() {
                   value={answers[q.id] ?? ''}
                   onChange={(e) => setAnswer(e.target.value)}
                   placeholder="답을 입력하세요"
-                  disabled={phase !== 'answering'}
+                  disabled={!currentAnswerEditable}
                   className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[14px] text-ink focus:outline-none focus:border-ink transition-colors disabled:bg-grain/20"
                 />
               )}

@@ -5,6 +5,23 @@ import { getQuestionResolutionLock } from '../lib/questionLock';
 /** Assignments router */
 const assignments = new Hono<{ Bindings: Env }>();
 
+type AssignmentProgressPayload = {
+  version?: number;
+  currentIdx?: number;
+  phase?: 'answering' | 'wrong' | 'mirror';
+  answers?: Record<string, string>;
+  workText?: Record<string, string>;
+  workDraw?: Record<string, unknown>;
+  attempts?: Record<string, number>;
+  results?: Record<string, boolean>;
+  chatMessages?: Record<string, { role: 'ai' | 'student'; content: string }[]>;
+  advanceApproved?: Record<string, boolean>;
+  teacherHelpRequested?: Record<string, boolean>;
+  finalResult?: { correct: number; total: number } | null;
+  hesitationCounts?: Record<string, number>;
+  signals?: Record<string, unknown>;
+};
+
 /**
  * POST /api/assignments
  * Teacher creates an assignment for a class.
@@ -98,6 +115,74 @@ assignments.get('/:id/questions', async (c) => {
     .all();
 
   return c.json({ questions: questions.results });
+});
+
+/**
+ * POST /api/assignments/:id/progress
+ * Persist in-progress student solve state for refresh/reconnect recovery.
+ * Body: { studentId, progress }
+ */
+assignments.post('/:id/progress', async (c) => {
+  const assignmentId = c.req.param('id');
+  const { studentId, progress } = await c.req.json<{
+    studentId: number;
+    progress: AssignmentProgressPayload;
+  }>();
+
+  await c.env.DB.prepare(
+    `DELETE FROM behavior_signals
+     WHERE student_id = ?
+       AND type = 'assignment_progress'
+       AND json_extract(payload, '$.assignment_id') = ?`,
+  )
+    .bind(studentId, assignmentId)
+    .run();
+
+  await c.env.DB.prepare(
+    `INSERT INTO behavior_signals (student_id, type, payload)
+     VALUES (?, 'assignment_progress', ?)`,
+  )
+    .bind(
+      studentId,
+      JSON.stringify({
+        assignment_id: assignmentId,
+        updated_at: new Date().toISOString(),
+        progress,
+      }),
+    )
+    .run();
+
+  return c.json({ ok: true });
+});
+
+/**
+ * GET /api/assignments/:id/progress/:studentId
+ * Restore the latest in-progress student solve state.
+ */
+assignments.get('/:id/progress/:studentId', async (c) => {
+  const assignmentId = c.req.param('id');
+  const studentId = Number(c.req.param('studentId'));
+
+  const row = await c.env.DB.prepare(
+    `SELECT payload
+     FROM behavior_signals
+     WHERE student_id = ?
+       AND type = 'assignment_progress'
+       AND json_extract(payload, '$.assignment_id') = ?
+     ORDER BY created_at DESC
+     LIMIT 1`,
+  )
+    .bind(studentId, assignmentId)
+    .first<{ payload: string }>();
+
+  if (!row?.payload) return c.json({ progress: null });
+
+  try {
+    const payload = JSON.parse(row.payload) as { progress?: AssignmentProgressPayload };
+    return c.json({ progress: payload.progress ?? null });
+  } catch {
+    return c.json({ progress: null });
+  }
 });
 
 /**
