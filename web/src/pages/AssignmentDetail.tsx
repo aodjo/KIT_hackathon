@@ -35,11 +35,13 @@ type Assignment = {
 
 /** Submission record */
 type Submission = {
+  student_id: number;
   student_name: string;
   student_user_id: string;
   answer: string;
   correct: number;
   submitted_at: string;
+  submission_status?: 'submitted' | 'progress' | null;
 };
 
 type Analysis = {
@@ -1010,10 +1012,18 @@ export default function AssignmentDetail() {
                     </thead>
                     <tbody>
                       {submissions.map((s, i) => (
-                        <tr key={i} className="border-b border-grain/50 last:border-b-0">
+                        <tr
+                          key={i}
+                          onClick={() => navigate(`/c/${classId}/a/${id}/student/${s.student_id}`)}
+                          className="border-b border-grain/50 last:border-b-0 cursor-pointer transition-colors hover:bg-grain/20"
+                        >
                           <td className="px-4 py-3 text-[14px] text-ink">{s.student_name}</td>
                           <td className="px-4 py-3">
-                            {s.correct ? (
+                            {s.submission_status === 'progress' ? (
+                              <span className="text-[12px] font-mono text-amber-700 px-2 py-0.5 rounded border border-amber-200 bg-amber-50">
+                                {s.answer}
+                              </span>
+                            ) : s.correct ? (
                               <span className="text-[12px] font-mono text-emerald-600 px-2 py-0.5 rounded border border-emerald-200 bg-emerald-50">{s.answer}</span>
                             ) : (
                               <span className="text-[12px] font-mono text-red-500 px-2 py-0.5 rounded border border-red-200 bg-red-50">{s.answer}</span>

@@ -10,6 +10,7 @@ import WorkbookEditor from './pages/WorkbookEditor';
 import AssignmentDetail from './pages/AssignmentDetail';
 import StudentDashboard from './pages/StudentDashboard';
 import StudentAssignment from './pages/StudentAssignment';
+import TeacherStudentAssignmentView from './pages/TeacherStudentAssignmentView';
 import Navbar from './components/Navbar';
 import Onboarding from './components/Onboarding';
 import {
@@ -209,6 +210,7 @@ export default function App() {
         <Route path="/" element={<RootPage />} />
         <Route path="/c/:classId" element={<RoleRoute teacher={<Dashboard />} student={<StudentDashboard />} />} />
         <Route path="/c/:classId/a/:id" element={<RoleRoute teacher={<AssignmentDetail />} student={<StudentAssignment />} />} />
+        <Route path="/c/:classId/a/:id/student/:studentId" element={<RoleRoute teacher={<TeacherStudentAssignmentView />} student={<Forbidden />} />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/workbook/:id" element={(() => { const u = getStoredUser(); if (!u) return <Forbidden />; if (u.role !== 'teacher') return <Forbidden />; return <WorkbookEditor />; })()} />
         <Route path="/articles" element={<Articles />} />

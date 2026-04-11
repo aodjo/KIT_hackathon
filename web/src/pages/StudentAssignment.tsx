@@ -41,7 +41,7 @@ const diffColor: Record<string, string> = {
  * @param props.className optional CSS class
  * @return span with rendered math
  */
-function Latex({ text, className }: { text: string; className?: string }) {
+export function Latex({ text, className }: { text: string; className?: string }) {
   const html = text.replace(/\$([^$]+)\$/g, (_, tex: string) => {
     try {
       return katex.renderToString(tex, { throwOnError: false });
@@ -282,7 +282,7 @@ function MathEditor({ value, onChange, className }: { value: string; onChange: (
 type Point = { x: number; y: number };
 
 /** Stroke data */
-type Stroke = { points: Point[]; color: string; width: number };
+export type Stroke = { points: Point[]; color: string; width: number };
 
 /** Solve phase */
 type AssignmentPhase = 'answering' | 'wrong' | 'mirror';
@@ -323,7 +323,7 @@ type AssignmentProgressPayload = {
  * @param props.onSave callback when strokes change
  * @return canvas element
  */
-function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penSize, setPenSize, onExpand, onCollapse, readOnly = false }: {
+export function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penSize, setPenSize, onExpand, onCollapse, readOnly = false }: {
   strokes?: Stroke[];
   onSave: (strokes: Stroke[]) => void;
   height?: number;

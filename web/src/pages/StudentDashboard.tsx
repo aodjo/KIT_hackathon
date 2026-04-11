@@ -19,6 +19,7 @@ type Assignment = {
   my_answer: string | null;
   my_correct: number | null;
   submitted_at: string | null;
+  submission_status?: 'submitted' | 'progress' | null;
   created_at: string;
 };
 
@@ -106,7 +107,11 @@ export default function StudentDashboard() {
                   <div className="shrink-0 ml-4">
                     {a.submitted_at ? (
                       <span className={`text-[12px] font-mono px-2.5 py-1 rounded-full ${
-                        a.my_correct ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-500 border border-red-200'
+                        a.submission_status === 'progress'
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : a.my_correct
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                            : 'bg-red-50 text-red-500 border border-red-200'
                       }`}>
                         {a.my_answer}
                       </span>
