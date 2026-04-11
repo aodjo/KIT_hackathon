@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../db/types';
+import { getQuestionResolutionLock } from '../lib/questionLock';
 
 /** Assignments router */
 const assignments = new Hono<{ Bindings: Env }>();
@@ -129,6 +130,24 @@ assignments.post('/:id/submit-answers', async (c) => {
     .all<{ id: number; answer: string }>();
 
   const answerMap = new Map(qRows.results.map((r) => [r.id, r.answer]));
+  const lockedConflicts: number[] = [];
+
+  for (const answer of answers) {
+    const existingLock = await getQuestionResolutionLock(c.env.DB, studentId, id, answer.questionId);
+    if (!existingLock) continue;
+
+    const lockedAnswer = existingLock.studentAnswer?.trim();
+    if (lockedAnswer == null || answer.answer.trim() !== lockedAnswer) {
+      lockedConflicts.push(answer.questionId);
+    }
+  }
+
+  if (lockedConflicts.length > 0) {
+    return c.json({
+      error: 'Locked question answers cannot be changed after resolution.',
+      questionIds: lockedConflicts,
+    }, 409);
+  }
 
   /** Upsert each answer */
   const stmts = answers.map((a) => {

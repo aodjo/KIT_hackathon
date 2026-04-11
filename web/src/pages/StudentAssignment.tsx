@@ -291,7 +291,7 @@ type Stroke = { points: Point[]; color: string; width: number };
  * @param props.onSave callback when strokes change
  * @return canvas element
  */
-function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penSize, setPenSize, onExpand, onCollapse }: {
+function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penSize, setPenSize, onExpand, onCollapse, readOnly = false }: {
   strokes?: Stroke[];
   onSave: (strokes: Stroke[]) => void;
   height?: number;
@@ -301,6 +301,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
   setPenSize: (s: number) => void;
   onExpand?: () => void;
   onCollapse?: () => void;
+  readOnly?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -481,14 +482,15 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
     e.preventDefault();
     isDown.current = true;
     canvasRef.current?.setPointerCapture(e.pointerId);
+    const activeTool = readOnly ? 'pan' : tool;
 
-    if (tool === 'pan') {
+    if (activeTool === 'pan') {
       panStart.current = { x: e.clientX, y: e.clientY };
       offsetStart.current = { ...offsetRef.current };
       return;
     }
 
-    if (tool === 'eraser') {
+    if (activeTool === 'eraser') {
       undoStack.current.push([...strokes.current]);
       redoStack.current = [];
       eraserDirty.current = false;
@@ -512,8 +514,9 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
   const onMove = (e: React.PointerEvent) => {
     e.preventDefault();
     if (!isDown.current) return;
+    const activeTool = readOnly ? 'pan' : tool;
 
-    if (tool === 'pan') {
+    if (activeTool === 'pan') {
       offsetRef.current = {
         x: offsetStart.current.x + (e.clientX - panStart.current.x),
         y: offsetStart.current.y + (e.clientY - panStart.current.y),
@@ -522,7 +525,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
       return;
     }
 
-    if (tool === 'eraser') {
+    if (activeTool === 'eraser') {
       eraseAt(toWorld(e));
       return;
     }
@@ -537,8 +540,9 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
   const onUp = (e: React.PointerEvent) => {
     e.preventDefault();
     isDown.current = false;
+    const activeTool = readOnly ? 'pan' : tool;
 
-    if (tool === 'eraser') {
+    if (activeTool === 'eraser') {
       if (!eraserDirty.current) undoStack.current.pop();
       return;
     }
@@ -596,6 +600,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
 
   /** Undo */
   const undo = () => {
+    if (readOnly) return;
     const prev = undoStack.current.pop();
     if (!prev) return;
     redoStack.current.push([...strokes.current]);
@@ -606,6 +611,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
 
   /** Redo */
   const redo = () => {
+    if (readOnly) return;
     const next = redoStack.current.pop();
     if (!next) return;
     undoStack.current.push([...strokes.current]);
@@ -616,6 +622,7 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
 
   /** Clear all */
   const clear = () => {
+    if (readOnly) return;
     undoStack.current.push([...strokes.current]);
     redoStack.current = [];
     strokes.current = [];
@@ -648,12 +655,23 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
   };
 
   /** Tool button helper */
-  const ToolBtn = ({ active, onClick, children, title }: { active?: boolean; onClick: () => void; children: React.ReactNode; title: string }) => (
+  const ToolBtn = ({ active, onClick, children, title, disabled = false }: {
+    active?: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+    title: string;
+    disabled?: boolean;
+  }) => (
     <button
       onClick={onClick}
       title={title}
+      disabled={disabled}
       className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
-        active ? 'bg-ink text-paper' : 'text-ink-muted hover:text-ink hover:bg-grain/50'
+        disabled
+          ? 'cursor-not-allowed text-ink-muted/40'
+          : active
+            ? 'bg-ink text-paper'
+            : 'text-ink-muted hover:text-ink hover:bg-grain/50'
       }`}
     >
       {children}
@@ -665,17 +683,17 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
       {/* toolbar */}
       <div className="flex items-center gap-1 mb-2 px-1 shrink-0">
         {/* drawing tools */}
-        <ToolBtn active={tool === 'pen'} onClick={() => setTool('pen')} title="펜">
+        <ToolBtn active={!readOnly && tool === 'pen'} onClick={() => setTool('pen')} title="펜" disabled={readOnly}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
           </svg>
         </ToolBtn>
-        <ToolBtn active={tool === 'eraser'} onClick={() => setTool('eraser')} title="지우개">
+        <ToolBtn active={!readOnly && tool === 'eraser'} onClick={() => setTool('eraser')} title="지우개" disabled={readOnly}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" /><path d="M22 21H7" /><path d="m5 11 9 9" />
           </svg>
         </ToolBtn>
-        <ToolBtn active={tool === 'pan'} onClick={() => setTool('pan')} title="이동">
+        <ToolBtn active={tool === 'pan' || readOnly} onClick={() => setTool('pan')} title="이동">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 9l-3 3 3 3" /><path d="M9 5l3-3 3 3" /><path d="M15 19l-3 3-3-3" /><path d="M19 9l3 3-3 3" /><path d="M2 12h20" /><path d="M12 2v20" />
           </svg>
@@ -691,8 +709,13 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
               key={s}
               onClick={() => setPenSize(s)}
               title={`${s}px`}
+              disabled={readOnly}
               className={`rounded-full transition-colors cursor-pointer ${
-                penSize === s ? 'bg-ink' : 'bg-ink/30 hover:bg-ink/60'
+                readOnly
+                  ? 'cursor-not-allowed bg-ink/15'
+                  : penSize === s
+                    ? 'bg-ink'
+                    : 'bg-ink/30 hover:bg-ink/60'
               }`}
               style={{ width: Math.max(6, s * 2 + 4), height: Math.max(6, s * 2 + 4) }}
             />
@@ -703,17 +726,17 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
         <div className="w-px h-5 bg-grain mx-1" />
 
         {/* undo/redo */}
-        <ToolBtn onClick={undo} title="실행 취소">
+        <ToolBtn onClick={undo} title="실행 취소" disabled={readOnly}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
           </svg>
         </ToolBtn>
-        <ToolBtn onClick={redo} title="다시 실행">
+        <ToolBtn onClick={redo} title="다시 실행" disabled={readOnly}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
           </svg>
         </ToolBtn>
-        <ToolBtn onClick={clear} title="전체 지우기">
+        <ToolBtn onClick={clear} title="전체 지우기" disabled={readOnly}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
           </svg>
@@ -775,9 +798,9 @@ function DrawCanvas({ strokes: savedStrokes, onSave, height, tool, setTool, penS
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
           className={`absolute inset-0 w-full h-full touch-none ${
-            tool === 'pan' ? 'cursor-grab active:cursor-grabbing' : tool === 'eraser' ? '' : 'cursor-crosshair'
+            readOnly || tool === 'pan' ? 'cursor-grab active:cursor-grabbing' : tool === 'eraser' ? '' : 'cursor-crosshair'
           }`}
-          style={tool === 'eraser' ? { cursor: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 12 12, auto` } : undefined}
+          style={!readOnly && tool === 'eraser' ? { cursor: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 12 12, auto` } : undefined}
         />
       </div>
     </div>
@@ -901,6 +924,7 @@ export default function StudentAssignment() {
   /** Whether the current question is cleared for progression */
   const currentTeacherHelpRequested = q ? !!teacherHelpRequested[q.id] : false;
   const currentAdvanceApproved = q ? !!advanceApproved[q.id] || !!teacherHelpRequested[q.id] : false;
+  const currentReviewLocked = currentAdvanceApproved;
 
   /**
    * Check whether a target question is accessible.
@@ -1182,7 +1206,7 @@ export default function StudentAssignment() {
    * @return void
    */
   const sendChat = async () => {
-    if (!user || !q || !chatInput.trim() || chatLoading) return;
+    if (!user || !q || !chatInput.trim() || chatLoading || advanceApproved[q.id] || teacherHelpRequested[q.id]) return;
     const questionId = q.id;
     const msgs = chatMessages[questionId] ?? [];
     const withStudent = [...msgs, { role: 'student' as const, content: chatInput.trim() }];
@@ -1281,6 +1305,12 @@ export default function StudentAssignment() {
         }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        const lockedIds = Array.isArray(data?.questionIds) ? data.questionIds.join(', ') : null;
+        throw new Error(lockedIds
+          ? `잠긴 문제의 답안을 수정할 수 없습니다. 문제 번호: ${lockedIds}`
+          : '제출할 수 없는 답안 변경이 감지되었습니다.');
+      }
       setFinalResult(data);
 
       questions.forEach((question) => {
@@ -1303,6 +1333,8 @@ export default function StudentAssignment() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ studentId: user.id, signals: signalData }),
       }).catch(() => {});
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '제출 처리 중 오류가 발생했습니다.');
     } finally {
       setSubmitting(false);
     }
@@ -1460,17 +1492,27 @@ export default function StudentAssignment() {
                     <span className="text-[12px] text-ink-muted">최대화 모드에서 편집 중</span>
                   </div>
                 ) : (
-                  <DrawCanvas
-                    key={q.id}
-                    strokes={workDraw[q.id]}
-                    onSave={(s) => { recordInput('drawing'); setWorkDraw((prev) => ({ ...prev, [q.id]: s })); }}
-                    height={240}
-                    tool={canvasTool}
-                    setTool={setCanvasTool}
-                    penSize={canvasPenSize}
-                    setPenSize={setCanvasPenSize}
-                    onExpand={openFullscreen}
-                  />
+                  <>
+                    <DrawCanvas
+                      key={q.id}
+                      strokes={workDraw[q.id]}
+                      onSave={(s) => { recordInput('drawing'); setWorkDraw((prev) => ({ ...prev, [q.id]: s })); }}
+                      height={240}
+                      tool={canvasTool}
+                      setTool={setCanvasTool}
+                      penSize={canvasPenSize}
+                      setPenSize={setCanvasPenSize}
+                      onExpand={openFullscreen}
+                      readOnly={currentReviewLocked}
+                    />
+                    {currentReviewLocked && (
+                      <p className="mt-2 text-[12px] text-ink-muted">
+                        {currentTeacherHelpRequested
+                          ? '선생님 도움 요청으로 문제 풀이가 종료되어 풀이과정은 읽기 전용입니다.'
+                          : '과거의 내가 이해를 완료해 풀이과정은 더 이상 수정할 수 없습니다.'}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1529,14 +1571,20 @@ export default function StudentAssignment() {
                     type="text"
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !chatLoading) sendChat(); }}
-                    placeholder="과거의 나에게 설명해주세요..."
-                    disabled={chatLoading}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !chatLoading && !currentReviewLocked) sendChat(); }}
+                    placeholder={
+                      currentTeacherHelpRequested
+                        ? '선생님 도움 요청으로 대화가 종료되었습니다.'
+                        : currentReviewLocked
+                          ? '문제 풀이가 완료되어 더 이상 대화할 수 없습니다.'
+                          : '과거의 나에게 설명해주세요...'
+                    }
+                    disabled={chatLoading || currentReviewLocked}
                     className="flex-1 border border-grain rounded-lg px-4 py-2.5 text-[14px] text-ink focus:outline-none focus:border-ink transition-colors disabled:bg-grain/20"
                   />
                   <button
                     onClick={sendChat}
-                    disabled={!chatInput.trim() || chatLoading}
+                    disabled={!chatInput.trim() || chatLoading || currentReviewLocked}
                     className="h-10 px-4 rounded-lg bg-ink text-paper text-[13px] font-medium cursor-pointer hover:bg-ink-soft transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     전송
@@ -1637,9 +1685,11 @@ export default function StudentAssignment() {
                       return (
                         <button
                           key={k}
-                          onClick={() => setAnswer(k)}
-                          className={`w-full text-left px-3 py-2 rounded-lg border text-[13px] transition-colors cursor-pointer ${
-                            selected ? 'border-ink bg-ink/5' : 'border-grain hover:border-ink/30'
+                          onClick={() => phase === 'answering' && setAnswer(k)}
+                          className={`w-full text-left px-3 py-2 rounded-lg border text-[13px] transition-colors ${
+                            phase === 'answering' ? 'cursor-pointer' : 'cursor-default'
+                          } ${
+                            selected ? 'border-ink bg-ink/5' : 'border-grain' + (phase === 'answering' ? ' hover:border-ink/30' : '')
                           }`}
                         >
                           <span className="font-mono text-ink-muted mr-2">{'①②③④⑤'[Number(k) - 1] ?? k}</span>
@@ -1655,7 +1705,8 @@ export default function StudentAssignment() {
                   value={answers[q.id] ?? ''}
                   onChange={(e) => setAnswer(e.target.value)}
                   placeholder="답을 입력하세요"
-                  className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[14px] text-ink focus:outline-none focus:border-ink transition-colors"
+                  disabled={phase !== 'answering'}
+                  className="w-full border border-grain rounded-lg px-4 py-2.5 font-mono text-[14px] text-ink focus:outline-none focus:border-ink transition-colors disabled:bg-grain/20"
                 />
               )}
             </div>
@@ -1674,6 +1725,7 @@ export default function StudentAssignment() {
                 penSize={canvasPenSize}
                 setPenSize={setCanvasPenSize}
                 onCollapse={closeFullscreen}
+                readOnly={currentReviewLocked}
               />
             </div>
           </div>

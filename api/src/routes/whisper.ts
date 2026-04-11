@@ -7,6 +7,7 @@ import {
   getCurriculumConceptLineage,
   type CurriculumConcept,
 } from '../lib/curriculum';
+import { getQuestionResolutionLock } from '../lib/questionLock';
 
 /** Whisper router - hidden question detection */
 const whisper = new Hono<{ Bindings: Env }>();
@@ -228,6 +229,21 @@ const buildFallbackAnalysis = (body: InferRequest, signalDesc: string): HiddenQu
  */
 whisper.post('/infer', async (c) => {
   const body = await c.req.json<InferRequest>();
+
+  const existingLock = await getQuestionResolutionLock(
+    c.env.DB,
+    body.studentId,
+    body.assignmentId,
+    body.questionId,
+  );
+  if (existingLock) {
+    return c.json({
+      analysis: null,
+      source: 'locked',
+      locked: true,
+      teacherHelpRequested: existingLock.teacherHelpRequested,
+    }, 409);
+  }
 
   const { signals } = body;
   const hesCount = signals.hesitations.length;

@@ -7,6 +7,7 @@ import {
   getCurriculumConceptLineage,
   type CurriculumConcept,
 } from '../lib/curriculum';
+import { getQuestionResolutionLock, saveQuestionResolutionLock } from '../lib/questionLock';
 
 /** MirrorMind router - past-self dialogue */
 const mirror = new Hono<{ Bindings: Env }>();
@@ -176,6 +177,21 @@ mirror.post('/chat', async (c) => {
   } = await c.req.json<MirrorChatRequest>();
 
   try {
+    if (studentId != null && assignmentId && questionId != null) {
+      const existingLock = await getQuestionResolutionLock(c.env.DB, studentId, assignmentId, questionId);
+      if (existingLock) {
+        return c.json({
+          reply: existingLock.teacherHelpRequested
+            ? '선생님 도움 요청으로 이 문제는 이미 종료됐어. 더 이상 대화할 수 없어.'
+            : '이 문제는 이미 설명이 완료돼서 더 이상 대화할 수 없어.',
+          allowNextQuestion: true,
+          analysisUpdated: false,
+          teacherHelpRequested: existingLock.teacherHelpRequested,
+          locked: true,
+        }, 409);
+      }
+    }
+
     const currentConcept = getCurriculumConcept(conceptId);
     const conceptPath = getCurriculumConceptLineage(conceptId);
     const conceptPathText = conceptPath.length > 0
@@ -348,6 +364,7 @@ ${existingAnalysisText}`,
     const allowNextByUnderstanding = response.content.some(
       (item) => item.type === 'tool_use' && item.name === 'allow_next_question',
     );
+    const allowNextInput = findLatestToolInput(response.content, 'allow_next_question');
     const analysisUpdateInput = findLatestToolInput(response.content, 'update_learning_analysis');
     const teacherHelpInput = findLatestToolInput(response.content, 'request_teacher_help');
     let analysisUpdated = false;
@@ -418,6 +435,26 @@ ${existingAnalysisText}`,
       ? '이제 이해했어. 다음 문제로 넘어가도 될 것 같아.'
       : '음... 아직은 잘 모르겠어. 조금만 더 설명해줄래?');
     const transcript = buildTranscript(messages, resolvedReply);
+
+    if (allowNextQuestion && studentId != null && assignmentId && questionId != null) {
+      const allowReason = allowNextInput && typeof allowNextInput === 'object' && typeof (allowNextInput as Record<string, unknown>).reason === 'string'
+        ? String((allowNextInput as Record<string, unknown>).reason).trim()
+        : resolvedReply;
+      const teacherHelpReason = teacherHelpInput && typeof teacherHelpInput === 'object' && typeof (teacherHelpInput as Record<string, unknown>).reason === 'string'
+        ? String((teacherHelpInput as Record<string, unknown>).reason).trim()
+        : resolvedReply;
+
+      await saveQuestionResolutionLock(c.env.DB, {
+        studentId,
+        assignmentId,
+        questionId,
+        conceptId: conceptId ?? null,
+        status: teacherHelpRequested ? 'teacher_help' : 'approved',
+        reason: teacherHelpRequested ? teacherHelpReason : allowReason,
+        studentAnswer: studentAnswer ?? null,
+        workText: workText ?? null,
+      });
+    }
 
     if (studentId != null && assignmentId && questionId != null && transcript.length > 0) {
       await c.env.DB.prepare(
