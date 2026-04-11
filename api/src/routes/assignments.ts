@@ -621,54 +621,7 @@ assignments.get('/class/:classId', async (c) => {
     .bind(classId)
     .all();
 
-  const assignmentsList = result.results as Array<Record<string, unknown>>;
-  if (assignmentsList.length === 0) return c.json({ assignments: [] });
-
-  const assignmentIds = assignmentsList.map((assignment) => String(assignment.id));
-  const placeholders = assignmentIds.map(() => '?').join(', ');
-  const submittedStudentsByAssignment = new Map<string, Set<number>>();
-  const getStudentSet = (assignmentId: string) => {
-    const existing = submittedStudentsByAssignment.get(assignmentId);
-    if (existing) return existing;
-    const created = new Set<number>();
-    submittedStudentsByAssignment.set(assignmentId, created);
-    return created;
-  };
-
-  const finalSubmissionRows = await c.env.DB.prepare(
-    `SELECT assignment_id, student_id
-     FROM submissions
-     WHERE assignment_id IN (${placeholders})`,
-  )
-    .bind(...assignmentIds)
-    .all<{ assignment_id: number; student_id: number }>();
-
-  finalSubmissionRows.results.forEach((row) => {
-    getStudentSet(String(row.assignment_id)).add(row.student_id);
-  });
-
-  const progressRows = await c.env.DB.prepare(
-    `SELECT student_id, payload
-     FROM behavior_signals
-     WHERE type = 'assignment_progress'
-       AND json_extract(payload, '$.assignment_id') IN (${placeholders})
-     ORDER BY created_at DESC`,
-  )
-    .bind(...assignmentIds)
-    .all<{ student_id: number; payload: string }>();
-
-  progressRows.results.forEach((row) => {
-    const parsed = parseStoredAssignmentProgress(row.payload);
-    if (!parsed?.assignmentId || countSubmittedQuestions(parsed.progress) === 0) return;
-    getStudentSet(parsed.assignmentId).add(row.student_id);
-  });
-
-  return c.json({
-    assignments: assignmentsList.map((assignment) => ({
-      ...assignment,
-      submission_count: submittedStudentsByAssignment.get(String(assignment.id))?.size ?? 0,
-    })),
-  });
+  return c.json({ assignments: result.results });
 });
 
 /**
