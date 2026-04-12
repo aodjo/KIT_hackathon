@@ -1689,7 +1689,7 @@ export default function KnowledgeMap() {
                     value={inputValue}
                     onChange={(event) => setInputValue(event.target.value)}
                     placeholder="예: D29"
-                    className="h-12 flex-1 rounded-full border border-grain bg-paper px-5 text-[14px] text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-ink/40"
+                    className="block min-h-[56px] w-full appearance-none rounded-full border border-grain bg-paper px-5 py-4 text-[14px] leading-none text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-ink/40"
                   />
                   <button
                     type="submit"
