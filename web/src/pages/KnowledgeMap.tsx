@@ -134,6 +134,89 @@ function buildAdjacency(relations: CurriculumRelation[]) {
   return adjacency;
 }
 
+function getRelationKey(relation: Pick<CurriculumRelation, 'sourceId' | 'targetId'>) {
+  return `${relation.sourceId}->${relation.targetId}`;
+}
+
+function buildRelationMaps(relations: CurriculumRelation[]) {
+  const incoming = new Map<string, CurriculumRelation[]>();
+  const outgoing = new Map<string, CurriculumRelation[]>();
+
+  relations.forEach((relation) => {
+    const parentBucket = incoming.get(relation.targetId) ?? [];
+    parentBucket.push(relation);
+    incoming.set(relation.targetId, parentBucket);
+
+    const childBucket = outgoing.get(relation.sourceId) ?? [];
+    childBucket.push(relation);
+    outgoing.set(relation.sourceId, childBucket);
+  });
+
+  return { incoming, outgoing };
+}
+
+function collectLineageSubgraph(
+  currentId: string | null | undefined,
+  relations: CurriculumRelation[],
+) {
+  const ancestorIds = new Set<string>();
+  const descendantIds = new Set<string>();
+  const directParentIds = new Set<string>();
+  const directChildIds = new Set<string>();
+  const highlightedEdgeKeys = new Set<string>();
+
+  if (!currentId) {
+    return {
+      ancestorIds,
+      descendantIds,
+      directParentIds,
+      directChildIds,
+      highlightedEdgeKeys,
+    };
+  }
+
+  const { incoming, outgoing } = buildRelationMaps(relations);
+  const visitedAncestors = new Set<string>();
+  const visitedDescendants = new Set<string>();
+
+  const visitAncestors = (nodeId: string, depth: number) => {
+    if (visitedAncestors.has(nodeId)) return;
+    visitedAncestors.add(nodeId);
+
+    const parents = incoming.get(nodeId) ?? [];
+    parents.forEach((relation) => {
+      ancestorIds.add(relation.sourceId);
+      highlightedEdgeKeys.add(getRelationKey(relation));
+      if (depth === 0) directParentIds.add(relation.sourceId);
+      visitAncestors(relation.sourceId, depth + 1);
+    });
+  };
+
+  const visitDescendants = (nodeId: string, depth: number) => {
+    if (visitedDescendants.has(nodeId)) return;
+    visitedDescendants.add(nodeId);
+
+    const children = outgoing.get(nodeId) ?? [];
+    children.forEach((relation) => {
+      descendantIds.add(relation.targetId);
+      highlightedEdgeKeys.add(getRelationKey(relation));
+      if (depth === 0) directChildIds.add(relation.targetId);
+      visitDescendants(relation.targetId, depth + 1);
+    });
+  };
+
+  visitAncestors(currentId, 0);
+  visitDescendants(currentId, 0);
+
+  return {
+    ancestorIds,
+    descendantIds,
+    directParentIds,
+    directChildIds,
+    highlightedEdgeKeys,
+  };
+}
+
 function buildKnowledgeLayout(graph: KnowledgeMapGraph) {
   const concepts = [...graph.concepts].sort(compareConcepts);
   const nodeWidth = 184;
@@ -240,7 +323,13 @@ function KnowledgeGraph({
   const nodeById = new Map(nodes.map((node) => [node.concept.id, node]));
   const adjacency = buildAdjacency(relations);
   const current = graph.concept;
-  const directNeighborIds = current ? adjacency.get(current.id) ?? new Set<string>() : new Set<string>();
+  const {
+    ancestorIds,
+    descendantIds,
+    directParentIds,
+    directChildIds,
+    highlightedEdgeKeys,
+  } = collectLineageSubgraph(current?.id, relations);
   const zoomRatio = view.scale / Math.max(fitScale, 0.0001);
   const zoomMode: ZoomMode = zoomRatio < 1.3 ? 'overview' : zoomRatio < 2.1 ? 'context' : 'detail';
 
@@ -333,7 +422,11 @@ function KnowledgeGraph({
 
   const renderNode = (node: LayoutNode) => {
     const isCurrent = current?.id === node.concept.id;
-    const isDirectNeighbor = directNeighborIds.has(node.concept.id);
+    const isAncestor = ancestorIds.has(node.concept.id);
+    const isDescendant = descendantIds.has(node.concept.id);
+    const isDirectParent = directParentIds.has(node.concept.id);
+    const isDirectChild = directChildIds.has(node.concept.id);
+    const isHighlighted = isCurrent || isAncestor || isDescendant;
     const title = node.concept.curriculum.at(-1) ?? node.concept.id;
     const contextText = `${node.concept.schoolLevel} ${node.concept.grade} · ${node.concept.subject}`;
     const detailText = node.concept.curriculum.join(', ');
@@ -343,10 +436,20 @@ function KnowledgeGraph({
       zoomMode === 'overview' ? 10 : zoomMode === 'context' ? 14 : 16,
       zoomMode === 'overview' ? 2 : zoomMode === 'context' ? 2 : 3,
     );
-    const background = isCurrent ? '#1c1913' : isDirectNeighbor ? '#f1e8d9' : 'rgba(255, 253, 248, 0.96)';
-    const stroke = isCurrent ? '#1c1913' : isDirectNeighbor ? 'rgba(140,111,79,0.45)' : 'rgba(188,175,154,0.9)';
+    const background = isCurrent
+      ? '#1c1913'
+      : isDirectParent || isDirectChild
+        ? '#eadac0'
+        : isHighlighted
+          ? 'rgba(241,232,217,0.96)'
+          : 'rgba(255, 253, 248, 0.96)';
+    const stroke = isCurrent
+      ? '#1c1913'
+      : isHighlighted
+        ? 'rgba(140,111,79,0.48)'
+        : 'rgba(188,175,154,0.9)';
     const titleFill = isCurrent ? 'rgba(255,250,240,0.96)' : '#1f1a15';
-    const metaFill = isCurrent ? 'rgba(255,250,240,0.68)' : '#8f7f68';
+    const metaFill = isCurrent ? 'rgba(255,250,240,0.68)' : isHighlighted ? '#6d5639' : '#8f7f68';
     const bodyY = zoomMode === 'overview' ? node.y + 42 : node.y + 50;
     const contextVisible = zoomMode !== 'overview';
     const detailVisible = zoomMode === 'detail';
@@ -389,31 +492,6 @@ function KnowledgeGraph({
           >
             {ellipsize(contextText, 26)}
           </text>
-        )}
-        {isCurrent && (
-          <>
-            <rect
-              x={node.x + node.width - 56}
-              y={node.y + 11}
-              width={42}
-              height={18}
-              rx={9}
-              fill="rgba(255,250,240,0.08)"
-              stroke="rgba(255,250,240,0.16)"
-              strokeWidth="1"
-            />
-            <text
-              x={node.x + node.width - 35}
-              y={node.y + 23.5}
-              fill="rgba(255,250,240,0.72)"
-              fontFamily="var(--font-mono, monospace)"
-              fontSize="8.5"
-              letterSpacing="1.2"
-              textAnchor="middle"
-            >
-              Focus
-            </text>
-          </>
         )}
         <text
           x={node.x + 14}
@@ -636,15 +714,25 @@ function KnowledgeGraph({
               const endX = target.x;
               const endY = target.y + target.height / 2;
               const horizontalGap = Math.max(72, (endX - startX) * 0.46);
-              const isFocusEdge = Boolean(current && (relation.sourceId === current.id || relation.targetId === current.id));
+              const isHighlightedEdge = highlightedEdgeKeys.has(getRelationKey(relation));
+              const isDirectEdge = Boolean(current && (
+                (relation.targetId === current.id && directParentIds.has(relation.sourceId))
+                || (relation.sourceId === current.id && directChildIds.has(relation.targetId))
+              ));
 
               return (
                 <path
                   key={`${relation.sourceId}-${relation.targetId}`}
                   d={`M ${startX} ${startY} C ${startX + horizontalGap} ${startY}, ${endX - horizontalGap} ${endY}, ${endX} ${endY}`}
                   fill="none"
-                  stroke={isFocusEdge ? 'rgba(28,25,19,0.42)' : 'rgba(107,91,73,0.18)'}
-                  strokeWidth={isFocusEdge ? 2.3 : 1.35}
+                  stroke={
+                    isDirectEdge
+                      ? 'rgba(28,25,19,0.52)'
+                      : isHighlightedEdge
+                        ? 'rgba(133,99,62,0.4)'
+                        : 'rgba(107,91,73,0.18)'
+                  }
+                  strokeWidth={isDirectEdge ? 2.7 : isHighlightedEdge ? 2.1 : 1.35}
                   strokeLinecap="round"
                 />
               );
@@ -780,9 +868,14 @@ export default function KnowledgeMap() {
   };
 
   const current = graph?.concept ?? null;
-  const adjacency = graph ? buildAdjacency(graph.relations) : new Map<string, Set<string>>();
-  const directNeighbors = graph && current
-    ? graph.concepts.filter((concept) => adjacency.get(current.id)?.has(concept.id)).sort(compareConcepts)
+  const lineageSubgraph = graph ? collectLineageSubgraph(current?.id, graph.relations) : null;
+  const highlightedConcepts = graph && lineageSubgraph
+    ? graph.concepts
+      .filter((concept) => (
+        concept.id !== current?.id
+        && (lineageSubgraph.ancestorIds.has(concept.id) || lineageSubgraph.descendantIds.has(concept.id))
+      ))
+      .sort(compareConcepts)
     : [];
 
   return (
@@ -890,7 +983,7 @@ export default function KnowledgeMap() {
             <aside className="space-y-4">
               <div className="rounded-[28px] border border-grain bg-paper/88 p-6 shadow-[0_14px_38px_rgba(40,38,34,0.06)]">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-clay-deep">
-                  현재 포커스
+                  선택 개념
                 </p>
                 <div className="mt-4">
                   <div className="flex items-center gap-2">
@@ -936,21 +1029,21 @@ export default function KnowledgeMap() {
                 </div>
                 <div className="rounded-[24px] border border-grain bg-paper/88 p-4">
                   <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-clay-deep">
-                    직접 연결
+                    관련 노드
                   </p>
                   <p className="mt-3 font-display text-[34px] leading-none tracking-tight-display text-ink">
-                    {directNeighbors.length}
+                    {highlightedConcepts.length}
                   </p>
                 </div>
               </div>
 
               <div className="rounded-[28px] border border-grain bg-paper/88 p-6 shadow-[0_14px_38px_rgba(40,38,34,0.06)]">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-clay-deep">
-                  직접 연결 개념
+                  관련 개념
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {directNeighbors.length > 0 ? (
-                    directNeighbors.map((concept) => (
+                  {highlightedConcepts.length > 0 ? (
+                    highlightedConcepts.map((concept) => (
                       <button
                         key={concept.id}
                         type="button"
@@ -967,7 +1060,7 @@ export default function KnowledgeMap() {
                     ))
                   ) : (
                     <p className="text-[13px] leading-[1.7] text-ink-muted">
-                      현재 개념과 직접 연결된 다른 노드가 없습니다.
+                      선택 개념과 직접 이어진 선수 또는 후속 개념이 없습니다.
                     </p>
                   )}
                 </div>
@@ -979,8 +1072,8 @@ export default function KnowledgeMap() {
                 </p>
                 <div className="mt-4 space-y-3 text-[13px] leading-[1.7] text-ink-muted">
                   <p>가로축은 학년과 과정, 세로축은 수학 영역입니다.</p>
-                  <p>검은 카드는 현재 포커스, 베이지 카드는 현재 개념과 직접 연결된 노드입니다.</p>
-                  <p>모든 선수 관계선을 깔아 두었고, 현재 개념과 맞닿은 선만 더 진하게 표시합니다.</p>
+                  <p>검은 카드는 선택 개념, 베이지 카드는 그 개념의 선수 경로와 후속 경로입니다.</p>
+                  <p>선택 개념의 조상 체인과 하위 서브트리만 강조하고, 상위 개념에서 옆으로 갈라지는 다른 하위 브랜치는 제외합니다.</p>
                 </div>
               </div>
             </aside>
