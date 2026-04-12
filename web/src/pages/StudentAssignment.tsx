@@ -70,7 +70,7 @@ export function Latex({ text, className }: { text: string; className?: string })
 }
 
 /**
- * MathLive-based math editor.
+ * Rich math editor for equations and structured notation.
  *
  * @param props.value LaTeX string
  * @param props.onChange change handler
