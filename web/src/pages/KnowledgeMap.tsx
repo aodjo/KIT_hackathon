@@ -1652,6 +1652,8 @@ export default function KnowledgeMap() {
   };
 
   const current = graph?.concept ?? null;
+  const searchValidationError = error === '개념 ID를 입력해 주세요.' ? error : null;
+  const loadError = error && error !== '개념 ID를 입력해 주세요.' ? error : null;
   const lineageSubgraph = graph ? collectLineageSubgraph(current?.id, graph.relations) : null;
   const highlightedConcepts = graph && lineageSubgraph
     ? graph.concepts
@@ -1686,13 +1688,13 @@ export default function KnowledgeMap() {
                     전체 개념 그래프를 불러오는 중입니다
                   </p>
                 </div>
-              ) : error ? (
+              ) : loadError ? (
                 <div className="rounded-[36px] border border-[#e8b8b1] bg-[#fff6f4] p-8">
                   <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#b14a3d]">
                     Load Error
                   </p>
                   <p className="mt-4 text-[16px] leading-[1.6] text-[#7d3a30]">
-                    {error}
+                    {loadError}
                   </p>
                 </div>
               ) : graph ? (
@@ -1708,7 +1710,10 @@ export default function KnowledgeMap() {
                 <form onSubmit={submitInput} className="mt-3 flex flex-col gap-3">
                   <input
                     value={inputValue}
-                    onChange={(event) => setInputValue(event.target.value)}
+                    onChange={(event) => {
+                      setInputValue(event.target.value);
+                      if (searchValidationError) setError(null);
+                    }}
                     placeholder="예: D29"
                     className="block min-h-[56px] w-full appearance-none rounded-full border border-grain bg-paper px-5 py-4 text-[14px] leading-none text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-ink/40"
                   />
@@ -1719,6 +1724,11 @@ export default function KnowledgeMap() {
                     불러오기
                   </button>
                 </form>
+                {searchValidationError ? (
+                  <p className="mt-3 px-2 text-[13px] leading-[1.6] text-[#b14a3d]">
+                    {searchValidationError}
+                  </p>
+                ) : null}
 
               </div>
 
