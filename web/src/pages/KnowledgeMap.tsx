@@ -1674,7 +1674,7 @@ export default function KnowledgeMap() {
                 Knowledge Graph
               </p>
               <h1 className="mt-4 font-display text-[48px] leading-[0.98] tracking-tight-display text-ink lg:text-[72px]">
-                전체 개념 연결 지도
+                전체 개념 지도
               </h1>
               <p className="mt-5 max-w-3xl font-display text-[18px] leading-[1.6] text-ink-muted">
                 모든 단원 노드를 한 화면에 배치하고, 선수 관계선을 전부 표시합니다. 현재 개념은 강조만 주고, 전체 구조 안에서 어디에 놓여 있는지 바로 읽을 수 있게 했습니다.
