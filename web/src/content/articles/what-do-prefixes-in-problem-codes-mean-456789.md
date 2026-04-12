@@ -1,9 +1,9 @@
 ---
-title: 문제 코드 앞의 D, N은 무엇을 의미할까요?
+title: 개념 ID 앞의 D, N은 무엇을 의미할까요?
 slug: what-do-prefixes-in-problem-codes-mean-456789
 category: product
 date: 2026-04-11
-excerpt: 문제 코드 앞의 알파벳은 난이도가 아니라, Echo가 문제를 연결해두는 커리큘럼 개념 영역을 뜻합니다.
+excerpt: 개념 ID의 접두어가 무엇을 의미하는지, 어떻게 해석하면 되는지에 대해 설명합니다.
 ---
 
 ## 정확히는, 수식어보다 접두어에 가깝습니다
