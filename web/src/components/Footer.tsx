@@ -13,44 +13,21 @@ export default function Footer() {
           <div className="max-w-sm">
             <Logo />
             <p className="mt-5 text-[13px] leading-[1.7] text-ink-muted">
-              학생이 주도하는 AI 학습.
+              학생이 가르치는 학습.
               <br />
               가르치며 깊이 이해합니다.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-10 sm:gap-16">
+          <div className="grid grid-cols-2 gap-10 sm:gap-16">
             <div>
               <div className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">
                 Product
               </div>
               <ul className="mt-4 space-y-2.5 text-[13px] text-ink-muted">
                 <li>
-                  <a href="#concept" className="hover:text-ink transition-colors">
-                    컨셉
-                  </a>
-                </li>
-                <li>
-                  <a href="#features" className="hover:text-ink transition-colors">
-                    기능
-                  </a>
-                </li>
-                <li>
-                  <a href="#demo" className="hover:text-ink transition-colors">
-                    데모
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">
-                Articles
-              </div>
-              <ul className="mt-4 space-y-2.5 text-[13px] text-ink-muted">
-                <li>
                   <Link to="/articles" className="hover:text-ink transition-colors">
-                    전체 보기
+                    아티클
                   </Link>
                 </li>
                 <li>
@@ -61,7 +38,7 @@ export default function Footer() {
               </ul>
             </div>
 
-            <div className="col-span-2 sm:col-span-1">
+            <div>
               <div className="text-[10px] uppercase tracking-[0.14em] text-clay-deep font-medium font-mono">
                 Contact
               </div>
