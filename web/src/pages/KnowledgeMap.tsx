@@ -1632,7 +1632,7 @@ export default function KnowledgeMap() {
 
     load();
     return () => { cancelled = true; };
-  }, [conceptIdParam, graph, questionIdParam]);
+  }, [conceptIdParam, questionIdParam]);
 
   const submitInput = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
