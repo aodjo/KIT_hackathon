@@ -23,6 +23,18 @@ type CurriculumConcept = {
   curriculum: string[];
 };
 
+type CurriculumRelation = {
+  sourceId: string;
+  targetId: string;
+  kind: 'requirement';
+};
+
+type CurriculumGraph = {
+  concept: CurriculumConcept | null;
+  concepts: CurriculumConcept[];
+  relations: CurriculumRelation[];
+};
+
 const curriculum = curriculumData as CurriculumTree;
 const conceptMap = new Map<string, CurriculumConcept>();
 
@@ -97,18 +109,74 @@ function formatCurriculumConceptLabel(concept: Pick<CurriculumConcept, 'id' | 's
 function getCurriculumSnapshot(conceptId?: string | null) {
   const concept = getCurriculumConcept(conceptId);
   const lineage = getCurriculumConceptLineage(conceptId);
+  const lineageIds = new Set(lineage.map((item) => item.id));
+  const relatedConcepts = concept ? lineage.filter((item) => item.id !== concept.id) : [];
+  const relations = lineage.flatMap<CurriculumRelation>((item) => (
+    item.requirements
+      .filter((requirementId) => requirementId !== item.id && lineageIds.has(requirementId))
+      .map((requirementId) => ({
+        sourceId: requirementId,
+        targetId: item.id,
+        kind: 'requirement' as const,
+      }))
+  ));
 
   return {
     concept,
     lineage,
+    relatedConcepts,
+    relations,
     labels: lineage.map((item) => formatCurriculumConceptLabel(item)),
   };
 }
 
-export type { CurriculumConcept };
+/**
+ * Return every curriculum concept in the dataset.
+ *
+ * @return flat concept list
+ */
+function getAllCurriculumConcepts() {
+  return Array.from(conceptMap.values());
+}
+
+/**
+ * Return every prerequisite edge across the dataset.
+ *
+ * @return flat relation list
+ */
+function getAllCurriculumRelations() {
+  return getAllCurriculumConcepts().flatMap<CurriculumRelation>((concept) => (
+    concept.requirements
+      .filter((requirementId) => requirementId !== concept.id && conceptMap.has(requirementId))
+      .map((requirementId) => ({
+        sourceId: requirementId,
+        targetId: concept.id,
+        kind: 'requirement' as const,
+      }))
+  ));
+}
+
+/**
+ * Build the full curriculum graph with an optional focused concept.
+ *
+ * @param conceptId optional focused concept ID
+ * @return full concept graph
+ */
+function getCurriculumGraph(conceptId?: string | null): CurriculumGraph {
+  return {
+    concept: getCurriculumConcept(conceptId),
+    concepts: getAllCurriculumConcepts(),
+    relations: getAllCurriculumRelations(),
+  };
+}
+
+export type { CurriculumConcept, CurriculumRelation, CurriculumGraph };
 export {
   formatCurriculumConceptLabel,
+  getAllCurriculumConcepts,
+  getAllCurriculumRelations,
   getCurriculumConcept,
   getCurriculumConceptLineage,
+  getCurriculumGraph,
   getCurriculumSnapshot,
 };

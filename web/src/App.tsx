@@ -3,6 +3,7 @@ import { Routes, Route, useLocation, useSearchParams } from 'react-router-dom';
 import Landing from './pages/Landing';
 import Articles from './pages/Articles';
 import Article from './pages/Article';
+import KnowledgeMap from './pages/KnowledgeMap';
 import Dashboard from './pages/Dashboard';
 import Learn from './pages/Learn';
 import Profile from './pages/Profile';
@@ -213,6 +214,7 @@ export default function App() {
         <Route path="/c/:classId/a/:id/student/:studentId" element={<RoleRoute teacher={<TeacherStudentAssignmentView />} student={<Forbidden />} />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/workbook/:id" element={(() => { const u = getStoredUser(); if (!u) return <Forbidden />; if (u.role !== 'teacher') return <Forbidden />; return <WorkbookEditor />; })()} />
+        <Route path="/knowledgemap" element={<KnowledgeMap />} />
         <Route path="/articles" element={<Articles />} />
         <Route path="/articles/date/:date" element={<Articles />} />
         <Route path="/articles/:slug" element={<Article />} />
