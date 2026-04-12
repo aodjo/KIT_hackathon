@@ -280,7 +280,7 @@ whisper.post('/infer', async (c) => {
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 400,
+        max_tokens: 600,
         system: `너는 수학 교육 전문가이다.
 학생이 문제를 푸는 과정에서 보인 행동 신호와 풀이를 분석하여:
 1. 어디서 막혔는지 (stuck_point)
