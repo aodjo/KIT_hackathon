@@ -378,7 +378,7 @@ export default function WorkbookEditor() {
     const newIndex = questions.findIndex((q) => q.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const reordered = arrayMove(questions, oldIndex, newIndex);
+    const reordered: Question[] = arrayMove(questions, oldIndex, newIndex);
     setQuestions(reordered);
 
     await fetch(`${API}/api/workbooks/${id}/questions/reorder`, {
