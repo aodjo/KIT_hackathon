@@ -1620,8 +1620,24 @@ export default function KnowledgeMap() {
 
         setLoading(true);
         setError(null);
-        const nextGraph = await fetchCurriculumGraph(conceptId);
-        if (!cancelled) setGraph(nextGraph);
+        try {
+          const nextGraph = await fetchCurriculumGraph(conceptId);
+          if (!cancelled) setGraph(nextGraph);
+        } catch (fetchError) {
+          const fetchMessage = fetchError instanceof Error ? fetchError.message : '';
+          const isMissingConcept = fetchMessage.includes('Concept not found')
+            || fetchMessage.includes(`concept ${conceptId}`);
+
+          if (isMissingConcept) {
+            if (!graph?.concepts.length) {
+              const fallbackGraph = await fetchCurriculumGraph();
+              if (!cancelled) setGraph(fallbackGraph);
+            }
+            throw new Error(`개념 ID ${conceptId}를 찾을 수 없습니다.`);
+          }
+
+          throw fetchError;
+        }
       } catch (nextError) {
         if (cancelled) return;
         setError(nextError instanceof Error ? nextError.message : '개념 지도를 불러오지 못했습니다.');
@@ -1652,8 +1668,12 @@ export default function KnowledgeMap() {
   };
 
   const current = graph?.concept ?? null;
-  const searchValidationError = error === '개념 ID를 입력해 주세요.' ? error : null;
-  const loadError = error && error !== '개념 ID를 입력해 주세요.' ? error : null;
+  const isInlineSearchError = Boolean(
+    error === '개념 ID를 입력해 주세요.'
+    || (error?.startsWith('개념 ID ') && error.endsWith('를 찾을 수 없습니다.')),
+  );
+  const searchInlineError = isInlineSearchError ? error : null;
+  const loadError = error && !isInlineSearchError ? error : null;
   const lineageSubgraph = graph ? collectLineageSubgraph(current?.id, graph.relations) : null;
   const highlightedConcepts = graph && lineageSubgraph
     ? graph.concepts
@@ -1712,7 +1732,7 @@ export default function KnowledgeMap() {
                     value={inputValue}
                     onChange={(event) => {
                       setInputValue(event.target.value);
-                      if (searchValidationError) setError(null);
+                      if (searchInlineError) setError(null);
                     }}
                     placeholder="예: D29"
                     className="block min-h-[56px] w-full appearance-none rounded-full border border-grain bg-paper px-5 py-4 text-[14px] leading-none text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-ink/40"
@@ -1724,9 +1744,9 @@ export default function KnowledgeMap() {
                     불러오기
                   </button>
                 </form>
-                {searchValidationError ? (
+                {searchInlineError ? (
                   <p className="mt-3 px-2 text-[13px] leading-[1.6] text-[#b14a3d]">
-                    {searchValidationError}
+                    {searchInlineError}
                   </p>
                 ) : null}
 
