@@ -31,8 +31,8 @@ export default function Footer() {
                   </Link>
                 </li>
                 <li>
-                  <Link to="/articles/how-does-echo-works-123983" className="hover:text-ink transition-colors">
-                    작동 방법
+                  <Link to="/knowledgemap" className="hover:text-ink transition-colors">
+                    개념 지도
                   </Link>
                 </li>
               </ul>
