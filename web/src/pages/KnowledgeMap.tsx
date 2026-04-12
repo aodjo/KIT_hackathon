@@ -43,6 +43,36 @@ type LayoutLane = {
   height: number;
 };
 
+type RoutePoint = {
+  x: number;
+  y: number;
+};
+
+type CubicSegment = {
+  start: RoutePoint;
+  control1: RoutePoint;
+  control2: RoutePoint;
+  end: RoutePoint;
+};
+
+type RelationRouteMeta = {
+  offset: number;
+};
+
+type AnchorSide = 'left' | 'right' | 'top' | 'bottom';
+
+type NodeAnchor = {
+  normal: RoutePoint;
+  point: RoutePoint;
+  side: AnchorSide;
+};
+
+type TextBlockLayout = {
+  lines: string[];
+  fontSize: number;
+  lineHeight: number;
+};
+
 const DEFAULT_CONCEPT_ID = 'D29';
 const EXAMPLE_CONCEPT_IDS = ['D23', 'D29', 'C17', 'P14'];
 const SUBJECT_ORDER = ['수와 연산', '도형과 측정', '변화와 관계', '자료와 가능성'] as const;
@@ -112,6 +142,68 @@ function wrapText(text: string, maxChars: number, maxLines: number) {
   return lines;
 }
 
+function wrapTextAll(text: string, maxChars: number) {
+  const chars = Array.from(text.trim());
+  if (chars.length === 0) return [];
+
+  const lines: string[] = [];
+  let index = 0;
+
+  while (index < chars.length) {
+    const remaining = chars.length - index;
+    const take = Math.min(maxChars, remaining);
+    lines.push(chars.slice(index, index + take).join(''));
+    index += take;
+  }
+
+  return lines;
+}
+
+function fitTextBlock({
+  text,
+  width,
+  availableHeight,
+  maxFontSize,
+  minFontSize,
+  maxLines,
+  requireAllText = false,
+}: {
+  text: string;
+  width: number;
+  availableHeight: number;
+  maxFontSize: number;
+  minFontSize: number;
+  maxLines?: number;
+  requireAllText?: boolean;
+}): TextBlockLayout {
+  for (let fontSize = maxFontSize; fontSize >= minFontSize; fontSize -= 0.4) {
+    const maxChars = Math.max(4, Math.floor(width / (fontSize * 0.82)));
+    const lines = requireAllText
+      ? wrapTextAll(text, maxChars)
+      : wrapText(text, maxChars, maxLines ?? Number.MAX_SAFE_INTEGER);
+    const lineHeight = fontSize * (requireAllText ? 1.16 : 1.22);
+
+    if (lines.length * lineHeight <= availableHeight) {
+      return {
+        lines,
+        fontSize: Number(fontSize.toFixed(1)),
+        lineHeight: Number(lineHeight.toFixed(1)),
+      };
+    }
+  }
+
+  const fallbackChars = Math.max(4, Math.floor(width / (minFontSize * 0.82)));
+  const fallbackLines = requireAllText
+    ? wrapTextAll(text, fallbackChars)
+    : wrapText(text, fallbackChars, maxLines ?? Number.MAX_SAFE_INTEGER);
+
+  return {
+    lines: fallbackLines,
+    fontSize: minFontSize,
+    lineHeight: Number((minFontSize * (requireAllText ? 1.16 : 1.22)).toFixed(1)),
+  };
+}
+
 function ellipsize(text: string, maxChars: number) {
   const chars = Array.from(text);
   if (chars.length <= maxChars) return text;
@@ -136,6 +228,343 @@ function buildAdjacency(relations: CurriculumRelation[]) {
 
 function getRelationKey(relation: Pick<CurriculumRelation, 'sourceId' | 'targetId'>) {
   return `${relation.sourceId}->${relation.targetId}`;
+}
+
+function getCenteredOffset(index: number, count: number, step: number) {
+  return (index - (count - 1) / 2) * step;
+}
+
+function buildRelationRouteMeta(
+  relations: CurriculumRelation[],
+  nodeById: Map<string, LayoutNode>,
+) {
+  const sourceBuckets = new Map<string, CurriculumRelation[]>();
+  const targetBuckets = new Map<string, CurriculumRelation[]>();
+  const offsetByKey = new Map<string, number>();
+
+  relations.forEach((relation) => {
+    const sourceBucket = sourceBuckets.get(relation.sourceId) ?? [];
+    sourceBucket.push(relation);
+    sourceBuckets.set(relation.sourceId, sourceBucket);
+
+    const targetBucket = targetBuckets.get(relation.targetId) ?? [];
+    targetBucket.push(relation);
+    targetBuckets.set(relation.targetId, targetBucket);
+  });
+
+  sourceBuckets.forEach((bucket) => {
+    bucket
+      .sort((left, right) => {
+        const leftNode = nodeById.get(left.targetId);
+        const rightNode = nodeById.get(right.targetId);
+        if (!leftNode || !rightNode) return 0;
+        if (leftNode.x !== rightNode.x) return leftNode.x - rightNode.x;
+        return leftNode.y - rightNode.y;
+      })
+      .forEach((relation, index) => {
+        const key = getRelationKey(relation);
+        offsetByKey.set(key, (offsetByKey.get(key) ?? 0) + getCenteredOffset(index, bucket.length, 12));
+      });
+  });
+
+  targetBuckets.forEach((bucket) => {
+    bucket
+      .sort((left, right) => {
+        const leftNode = nodeById.get(left.sourceId);
+        const rightNode = nodeById.get(right.sourceId);
+        if (!leftNode || !rightNode) return 0;
+        if (leftNode.x !== rightNode.x) return leftNode.x - rightNode.x;
+        return leftNode.y - rightNode.y;
+      })
+      .forEach((relation, index) => {
+        const key = getRelationKey(relation);
+        offsetByKey.set(key, (offsetByKey.get(key) ?? 0) + getCenteredOffset(index, bucket.length, 10));
+      });
+  });
+
+  return new Map<string, RelationRouteMeta>(
+    relations.map((relation) => {
+      const key = getRelationKey(relation);
+      return [key, { offset: clamp(offsetByKey.get(key) ?? 0, -28, 28) }];
+    }),
+  );
+}
+
+function buildCubicPath(segment: CubicSegment) {
+  return `M ${segment.start.x} ${segment.start.y} C ${segment.control1.x} ${segment.control1.y}, ${segment.control2.x} ${segment.control2.y}, ${segment.end.x} ${segment.end.y}`;
+}
+
+function sampleCubicSegment(segment: CubicSegment, t: number): RoutePoint {
+  const mt = 1 - t;
+  const mt2 = mt * mt;
+  const mt3 = mt2 * mt;
+  const t2 = t * t;
+  const t3 = t2 * t;
+
+  return {
+    x: mt3 * segment.start.x
+      + 3 * mt2 * t * segment.control1.x
+      + 3 * mt * t2 * segment.control2.x
+      + t3 * segment.end.x,
+    y: mt3 * segment.start.y
+      + 3 * mt2 * t * segment.control1.y
+      + 3 * mt * t2 * segment.control2.y
+      + t3 * segment.end.y,
+  };
+}
+
+function pointIntersectsNode(point: RoutePoint, node: LayoutNode, padding = 6) {
+  return (
+    point.x >= node.x - padding
+    && point.x <= node.x + node.width + padding
+    && point.y >= node.y - padding
+    && point.y <= node.y + node.height + padding
+  );
+}
+
+function collectBlockingNodes(
+  segment: CubicSegment,
+  nodes: LayoutNode[],
+  sourceId: string,
+  targetId: string,
+) {
+  const blockers = new Map<string, LayoutNode>();
+
+  for (let index = 1; index < 20; index += 1) {
+    const point = sampleCubicSegment(segment, index / 20);
+    nodes.forEach((node) => {
+      if (node.concept.id === sourceId || node.concept.id === targetId) return;
+      if (pointIntersectsNode(point, node)) blockers.set(node.concept.id, node);
+    });
+  }
+
+  return Array.from(blockers.values());
+}
+
+function getNodeCenter(node: LayoutNode): RoutePoint {
+  return {
+    x: node.x + node.width / 2,
+    y: node.y + node.height / 2,
+  };
+}
+
+function getNodeAnchor(node: LayoutNode, side: AnchorSide, offset: number): NodeAnchor {
+  const center = getNodeCenter(node);
+  const verticalInset = 18;
+  const horizontalInset = 22;
+
+  switch (side) {
+    case 'left':
+      return {
+        side,
+        point: {
+          x: node.x,
+          y: clamp(center.y + offset, node.y + verticalInset, node.y + node.height - verticalInset),
+        },
+        normal: { x: -1, y: 0 },
+      };
+    case 'right':
+      return {
+        side,
+        point: {
+          x: node.x + node.width,
+          y: clamp(center.y + offset, node.y + verticalInset, node.y + node.height - verticalInset),
+        },
+        normal: { x: 1, y: 0 },
+      };
+    case 'top':
+      return {
+        side,
+        point: {
+          x: clamp(center.x + offset, node.x + horizontalInset, node.x + node.width - horizontalInset),
+          y: node.y,
+        },
+        normal: { x: 0, y: -1 },
+      };
+    case 'bottom':
+      return {
+        side,
+        point: {
+          x: clamp(center.x + offset, node.x + horizontalInset, node.x + node.width - horizontalInset),
+          y: node.y + node.height,
+        },
+        normal: { x: 0, y: 1 },
+      };
+  }
+}
+
+function getOppositeVerticalSide(side: AnchorSide) {
+  return side === 'top' ? 'bottom' : side === 'bottom' ? 'top' : side;
+}
+
+function getCandidateSides(
+  node: LayoutNode,
+  otherNode: LayoutNode,
+  role: 'source' | 'target',
+  forward: boolean,
+): AnchorSide[] {
+  const nodeCenter = getNodeCenter(node);
+  const otherCenter = getNodeCenter(otherNode);
+  const dx = otherCenter.x - nodeCenter.x;
+  const dy = otherCenter.y - nodeCenter.y;
+  const horizontalSide: AnchorSide = role === 'source'
+    ? (forward ? 'right' : 'left')
+    : (forward ? 'left' : 'right');
+  const verticalSide: AnchorSide = dy < 0 ? 'top' : 'bottom';
+  const verticalPreferred = Math.abs(dy) > Math.abs(dx) * 0.72;
+
+  return verticalPreferred
+    ? [verticalSide, horizontalSide, getOppositeVerticalSide(verticalSide)]
+    : [horizontalSide, verticalSide, getOppositeVerticalSide(verticalSide)];
+}
+
+function getVectorLength(vector: RoutePoint) {
+  return Math.hypot(vector.x, vector.y);
+}
+
+function normalizeVector(vector: RoutePoint) {
+  const length = getVectorLength(vector) || 1;
+  return {
+    x: vector.x / length,
+    y: vector.y / length,
+  };
+}
+
+function offsetPoint(point: RoutePoint, vector: RoutePoint, distance: number): RoutePoint {
+  return {
+    x: point.x + vector.x * distance,
+    y: point.y + vector.y * distance,
+  };
+}
+
+function buildDirectRelationSegment(
+  source: LayoutNode,
+  target: LayoutNode,
+  forward: boolean,
+  offset: number,
+  startSide: AnchorSide,
+  endSide: AnchorSide,
+) {
+  const start = getNodeAnchor(source, startSide, offset);
+  const end = getNodeAnchor(target, endSide, -offset * 0.75);
+  const delta = {
+    x: end.point.x - start.point.x,
+    y: end.point.y - start.point.y,
+  };
+  const distance = getVectorLength(delta);
+  const controlPull = clamp(distance * 0.28, 28, 112);
+
+  return {
+    start: start.point,
+    control1: offsetPoint(start.point, start.normal, controlPull),
+    control2: offsetPoint(end.point, end.normal, controlPull),
+    end: end.point,
+  };
+}
+
+function buildLocalDetourPath(
+  segment: CubicSegment,
+  offset: number,
+  blockers: LayoutNode[],
+  startAnchor: NodeAnchor,
+  endAnchor: NodeAnchor,
+) {
+  const start = segment.start;
+  const end = segment.end;
+  const blockerBounds = {
+    left: Math.min(...blockers.map((node) => node.x)),
+    right: Math.max(...blockers.map((node) => node.x + node.width)),
+    top: Math.min(...blockers.map((node) => node.y)),
+    bottom: Math.max(...blockers.map((node) => node.y + node.height)),
+  };
+  const blockerCenter = {
+    x: (blockerBounds.left + blockerBounds.right) / 2,
+    y: (blockerBounds.top + blockerBounds.bottom) / 2,
+  };
+  const chord = {
+    x: end.x - start.x,
+    y: end.y - start.y,
+  };
+  const normal = normalizeVector({ x: -chord.y, y: chord.x });
+  const clearance = Math.max(
+    blockerBounds.right - blockerBounds.left,
+    blockerBounds.bottom - blockerBounds.top,
+  ) / 2 + 30 + Math.abs(offset) * 0.35;
+  const detourCandidates = [1, -1].map((sign) => ({
+    x: blockerCenter.x + normal.x * clearance * sign,
+    y: blockerCenter.y + normal.y * clearance * sign,
+  }));
+  const detour = detourCandidates.sort((left, right) => {
+    const leftCost = Math.hypot(left.x - start.x, left.y - start.y) + Math.hypot(end.x - left.x, end.y - left.y);
+    const rightCost = Math.hypot(right.x - start.x, right.y - start.y) + Math.hypot(end.x - right.x, end.y - right.y);
+    return leftCost - rightCost;
+  })[0];
+  const fromStart = normalizeVector({ x: detour.x - start.x, y: detour.y - start.y });
+  const toEnd = normalizeVector({ x: end.x - detour.x, y: end.y - detour.y });
+  const startPull = clamp(Math.hypot(detour.x - start.x, detour.y - start.y) * 0.2, 24, 72);
+  const endPull = clamp(Math.hypot(end.x - detour.x, end.y - detour.y) * 0.2, 24, 72);
+  const midPull = clamp(Math.min(
+    Math.hypot(detour.x - start.x, detour.y - start.y),
+    Math.hypot(end.x - detour.x, end.y - detour.y),
+  ) * 0.18, 18, 46);
+
+  return [
+    `M ${start.x} ${start.y}`,
+    `C ${offsetPoint(start, startAnchor.normal, startPull).x} ${offsetPoint(start, startAnchor.normal, startPull).y}, ${offsetPoint(detour, fromStart, -midPull).x} ${offsetPoint(detour, fromStart, -midPull).y}, ${detour.x} ${detour.y}`,
+    `C ${offsetPoint(detour, toEnd, midPull).x} ${offsetPoint(detour, toEnd, midPull).y}, ${offsetPoint(end, endAnchor.normal, endPull).x} ${offsetPoint(end, endAnchor.normal, endPull).y}, ${end.x} ${end.y}`,
+  ].join(' ');
+}
+
+function buildRelationPath(
+  source: LayoutNode,
+  target: LayoutNode,
+  stages: LayoutStage[],
+  lanes: LayoutLane[],
+  nodes: LayoutNode[],
+  routeMeta: RelationRouteMeta,
+) {
+  const sourceStageIndex = STAGE_INDEX.get(source.stageKey) ?? -1;
+  const targetStageIndex = STAGE_INDEX.get(target.stageKey) ?? -1;
+  const sourceStage = stages.find((stage) => stage.key === source.stageKey);
+  const targetStage = stages.find((stage) => stage.key === target.stageKey);
+
+  if (!sourceStage || !targetStage || sourceStageIndex === -1 || targetStageIndex === -1) {
+    return '';
+  }
+
+  const routeOffset = routeMeta.offset;
+  const sameStage = sourceStageIndex === targetStageIndex;
+  const forward = sourceStageIndex <= targetStageIndex;
+  const sourceSides = getCandidateSides(source, target, 'source', forward);
+  const targetSides = getCandidateSides(target, source, 'target', forward);
+
+  const candidates = sourceSides.flatMap((startSide, startIndex) => (
+    targetSides.map((endSide, endIndex) => {
+      const segment = buildDirectRelationSegment(source, target, forward, routeOffset, startSide, endSide);
+      const blockers = collectBlockingNodes(segment, nodes, source.concept.id, target.concept.id);
+      return {
+        blockers,
+        endAnchor: getNodeAnchor(target, endSide, -routeOffset * 0.75),
+        endIndex,
+        segment,
+        startAnchor: getNodeAnchor(source, startSide, routeOffset),
+        startIndex,
+        weight: blockers.length * 1000 + startIndex * 10 + endIndex * 6 + (sameStage && startSide === endSide ? 24 : 0),
+      };
+    })
+  )).sort((left, right) => left.weight - right.weight);
+
+  const best = candidates[0];
+  if (!best) return '';
+  if (best.blockers.length === 0) return buildCubicPath(best.segment);
+
+  return buildLocalDetourPath(
+    best.segment,
+    routeOffset,
+    best.blockers,
+    best.startAnchor,
+    best.endAnchor,
+  );
 }
 
 function buildRelationMaps(relations: CurriculumRelation[]) {
@@ -321,6 +750,7 @@ function KnowledgeGraph({
   const [view, setView] = useState({ scale: 0.22, x: 0, y: 0 });
   const { sceneWidth, sceneHeight, nodes, stages, lanes, relations } = buildKnowledgeLayout(graph);
   const nodeById = new Map(nodes.map((node) => [node.concept.id, node]));
+  const relationRouteMeta = buildRelationRouteMeta(relations, nodeById);
   const adjacency = buildAdjacency(relations);
   const current = graph.concept;
   const {
@@ -431,11 +861,6 @@ function KnowledgeGraph({
     const contextText = `${node.concept.schoolLevel} ${node.concept.grade} · ${node.concept.subject}`;
     const detailText = node.concept.curriculum.join(', ');
     const directCount = adjacency.get(node.concept.id)?.size ?? 0;
-    const bodyLines = wrapText(
-      zoomMode === 'detail' ? detailText : title,
-      zoomMode === 'overview' ? 10 : zoomMode === 'context' ? 14 : 16,
-      zoomMode === 'overview' ? 2 : zoomMode === 'context' ? 2 : 3,
-    );
     const background = isCurrent
       ? '#1c1913'
       : isDirectParent || isDirectChild
@@ -450,9 +875,49 @@ function KnowledgeGraph({
         : 'rgba(188,175,154,0.9)';
     const titleFill = isCurrent ? 'rgba(255,250,240,0.96)' : '#1f1a15';
     const metaFill = isCurrent ? 'rgba(255,250,240,0.68)' : isHighlighted ? '#6d5639' : '#8f7f68';
-    const bodyY = zoomMode === 'overview' ? node.y + 42 : node.y + 50;
-    const contextVisible = zoomMode !== 'overview';
-    const detailVisible = zoomMode === 'detail';
+    const bodyText = zoomMode === 'detail' ? detailText : title;
+    let contextVisible = zoomMode !== 'overview';
+    let detailVisible = zoomMode === 'detail';
+    let bodyY = contextVisible ? node.y + 50 : node.y + 42;
+    let bodyBottomY = detailVisible ? node.y + node.height - 24 : node.y + node.height - 14;
+    let bodyLayout = fitTextBlock({
+      text: bodyText,
+      width: node.width - 28,
+      availableHeight: Math.max(18, bodyBottomY - bodyY),
+      maxFontSize: zoomMode === 'overview' ? 12.5 : zoomMode === 'context' ? 13.2 : 12.6,
+      minFontSize: zoomMode === 'overview' ? 10.2 : zoomMode === 'context' ? 9.6 : 6.2,
+      maxLines: zoomMode === 'overview' ? 2 : zoomMode === 'context' ? 3 : undefined,
+      requireAllText: zoomMode === 'detail',
+    });
+
+    if (zoomMode === 'detail' && bodyLayout.lines.length * bodyLayout.lineHeight > bodyBottomY - bodyY) {
+      detailVisible = false;
+      bodyBottomY = node.y + node.height - 14;
+      bodyLayout = fitTextBlock({
+        text: bodyText,
+        width: node.width - 28,
+        availableHeight: Math.max(18, bodyBottomY - bodyY),
+        maxFontSize: 12.6,
+        minFontSize: 6.2,
+        requireAllText: true,
+      });
+    }
+
+    if (zoomMode === 'detail' && bodyLayout.lines.length * bodyLayout.lineHeight > bodyBottomY - bodyY && contextVisible) {
+      contextVisible = false;
+      bodyY = node.y + 38;
+      bodyLayout = fitTextBlock({
+        text: bodyText,
+        width: node.width - 28,
+        availableHeight: Math.max(18, bodyBottomY - bodyY),
+        maxFontSize: 12.6,
+        minFontSize: 6.2,
+        requireAllText: true,
+      });
+    }
+
+    const contextFontSize = zoomMode === 'detail' ? 8.1 : 9;
+    const contextLabel = ellipsize(contextText, Math.max(14, Math.floor((node.width - 28) / (contextFontSize * 0.8))));
 
     return (
       <g
@@ -477,7 +942,7 @@ function KnowledgeGraph({
           y={node.y + 20}
           fill={metaFill}
           fontFamily="var(--font-mono, monospace)"
-          fontSize="10"
+          fontSize={zoomMode === 'detail' ? 9.2 : 10}
           letterSpacing="1.4"
         >
           {node.concept.id}
@@ -488,9 +953,9 @@ function KnowledgeGraph({
             y={node.y + 33}
             fill={metaFill}
             fontFamily="var(--font-mono, monospace)"
-            fontSize="9"
+            fontSize={contextFontSize}
           >
-            {ellipsize(contextText, 26)}
+            {contextLabel}
           </text>
         )}
         <text
@@ -498,13 +963,13 @@ function KnowledgeGraph({
           y={bodyY}
           fill={titleFill}
           fontFamily="var(--font-display, serif)"
-          fontSize={zoomMode === 'overview' ? 12.5 : zoomMode === 'context' ? 13.4 : 14.2}
+          fontSize={bodyLayout.fontSize}
         >
-          {bodyLines.map((line, index) => (
+          {bodyLayout.lines.map((line, index) => (
             <tspan
               key={`${node.concept.id}-line-${index}`}
               x={node.x + 14}
-              dy={index === 0 ? 0 : zoomMode === 'overview' ? 16 : 18}
+              dy={index === 0 ? 0 : bodyLayout.lineHeight}
             >
               {line}
             </tspan>
@@ -516,7 +981,7 @@ function KnowledgeGraph({
             y={node.y + node.height - 12}
             fill={metaFill}
             fontFamily="var(--font-mono, monospace)"
-            fontSize="9"
+            fontSize="8.1"
           >
             {`직접 연결 ${directCount}개`}
           </text>
@@ -709,11 +1174,15 @@ function KnowledgeGraph({
               const target = nodeById.get(relation.targetId);
               if (!source || !target) return null;
 
-              const startX = source.x + source.width;
-              const startY = source.y + source.height / 2;
-              const endX = target.x;
-              const endY = target.y + target.height / 2;
-              const horizontalGap = Math.max(72, (endX - startX) * 0.46);
+              const path = buildRelationPath(
+                source,
+                target,
+                stages,
+                lanes,
+                nodes,
+                relationRouteMeta.get(getRelationKey(relation)) ?? { offset: 0 },
+              );
+              if (!path) return null;
               const isHighlightedEdge = highlightedEdgeKeys.has(getRelationKey(relation));
               const isDirectEdge = Boolean(current && (
                 (relation.targetId === current.id && directParentIds.has(relation.sourceId))
@@ -723,7 +1192,7 @@ function KnowledgeGraph({
               return (
                 <path
                   key={`${relation.sourceId}-${relation.targetId}`}
-                  d={`M ${startX} ${startY} C ${startX + horizontalGap} ${startY}, ${endX - horizontalGap} ${endY}, ${endX} ${endY}`}
+                  d={path}
                   fill="none"
                   stroke={
                     isDirectEdge
@@ -734,6 +1203,7 @@ function KnowledgeGraph({
                   }
                   strokeWidth={isDirectEdge ? 2.7 : isHighlightedEdge ? 2.1 : 1.35}
                   strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
               );
             })}
@@ -885,13 +1355,6 @@ export default function KnowledgeMap() {
         <div className="flex flex-col gap-10">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <Link
-                to="/"
-                className="inline-flex items-center gap-1 text-[12px] font-medium text-ink-muted transition-colors hover:text-ink"
-              >
-                <span aria-hidden="true">←</span>
-                <span>돌아가기</span>
-              </Link>
               <p className="mt-8 font-mono text-[11px] uppercase tracking-[0.24em] text-clay-deep">
                 Knowledge Graph
               </p>
@@ -908,7 +1371,7 @@ export default function KnowledgeMap() {
                 <button
                   type="button"
                   onClick={() => setMode('concept')}
-                  className={`flex-1 rounded-full px-4 py-3 text-[13px] transition-colors ${
+                  className={`flex-1 rounded-full px-4 py-3 text-[13px] cursor-pointer transition-colors ${
                     mode === 'concept' ? 'bg-ink text-paper' : 'bg-grain-soft text-ink-muted hover:bg-grain'
                   }`}
                 >
@@ -917,7 +1380,7 @@ export default function KnowledgeMap() {
                 <button
                   type="button"
                   onClick={() => setMode('question')}
-                  className={`flex-1 rounded-full px-4 py-3 text-[13px] transition-colors ${
+                  className={`flex-1 rounded-full px-4 py-3 text-[13px] cursor-pointer transition-colors ${
                     mode === 'question' ? 'bg-ink text-paper' : 'bg-grain-soft text-ink-muted hover:bg-grain'
                   }`}
                 >
