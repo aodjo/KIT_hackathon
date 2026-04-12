@@ -1682,7 +1682,7 @@ export default function KnowledgeMap() {
             <aside className="space-y-4">
               <div className="rounded-[28px] border border-grain bg-paper/88 p-4 shadow-[0_14px_38px_rgba(40,38,34,0.06)] backdrop-blur-sm">
                 <p className="px-2 font-mono text-[10px] uppercase tracking-[0.2em] text-clay-deep">
-                  그래프 검색
+                  개념 ID 검색
                 </p>
                 <form onSubmit={submitInput} className="mt-3 flex flex-col gap-3">
                   <input
