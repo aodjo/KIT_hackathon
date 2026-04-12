@@ -263,7 +263,7 @@ function buildRelationRouteMeta(
       })
       .forEach((relation, index) => {
         const key = getRelationKey(relation);
-        offsetByKey.set(key, (offsetByKey.get(key) ?? 0) + getCenteredOffset(index, bucket.length, 12));
+        offsetByKey.set(key, (offsetByKey.get(key) ?? 0) + getCenteredOffset(index, bucket.length, 16));
       });
   });
 
@@ -278,14 +278,14 @@ function buildRelationRouteMeta(
       })
       .forEach((relation, index) => {
         const key = getRelationKey(relation);
-        offsetByKey.set(key, (offsetByKey.get(key) ?? 0) + getCenteredOffset(index, bucket.length, 10));
+        offsetByKey.set(key, (offsetByKey.get(key) ?? 0) + getCenteredOffset(index, bucket.length, 14));
       });
   });
 
   return new Map<string, RelationRouteMeta>(
     relations.map((relation) => {
       const key = getRelationKey(relation);
-      return [key, { offset: clamp(offsetByKey.get(key) ?? 0, -28, 28) }];
+      return [key, { offset: clamp(offsetByKey.get(key) ?? 0, -42, 42) }];
     }),
   );
 }
@@ -327,6 +327,7 @@ function collectBlockingNodes(
   nodes: LayoutNode[],
   sourceId: string,
   targetId: string,
+  padding = 6,
 ) {
   const blockers = new Map<string, LayoutNode>();
 
@@ -334,7 +335,7 @@ function collectBlockingNodes(
     const point = sampleCubicSegment(segment, index / 20);
     nodes.forEach((node) => {
       if (node.concept.id === sourceId || node.concept.id === targetId) return;
-      if (pointIntersectsNode(point, node)) blockers.set(node.concept.id, node);
+      if (pointIntersectsNode(point, node, padding)) blockers.set(node.concept.id, node);
     });
   }
 
@@ -462,57 +463,370 @@ function buildDirectRelationSegment(
   };
 }
 
-function buildLocalDetourPath(
-  segment: CubicSegment,
-  offset: number,
-  blockers: LayoutNode[],
+function buildPathFromCubicSegments(segments: CubicSegment[]) {
+  if (segments.length === 0) return '';
+
+  return segments.map((segment, index) => (
+    index === 0
+      ? `M ${segment.start.x} ${segment.start.y} C ${segment.control1.x} ${segment.control1.y}, ${segment.control2.x} ${segment.control2.y}, ${segment.end.x} ${segment.end.y}`
+      : `C ${segment.control1.x} ${segment.control1.y}, ${segment.control2.x} ${segment.control2.y}, ${segment.end.x} ${segment.end.y}`
+  )).join(' ');
+}
+
+function collectBlockingNodesForSegments(
+  segments: CubicSegment[],
+  nodes: LayoutNode[],
+  sourceId: string,
+  targetId: string,
+  padding = 6,
+) {
+  const blockers = new Map<string, LayoutNode>();
+
+  segments.forEach((segment) => {
+    collectBlockingNodes(segment, nodes, sourceId, targetId, padding)
+      .forEach((node) => blockers.set(node.concept.id, node));
+  });
+
+  return Array.from(blockers.values());
+}
+
+function estimateSegmentSpan(segment: CubicSegment) {
+  return Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y);
+}
+
+function buildSoftDetourSegments(
   startAnchor: NodeAnchor,
   endAnchor: NodeAnchor,
+  corridorY: number,
 ) {
-  const start = segment.start;
-  const end = segment.end;
-  const blockerBounds = {
+  const start = startAnchor.point;
+  const end = endAnchor.point;
+  const startExitX = start.x + clamp(30 + Math.abs(corridorY - start.y) * 0.18, 28, 72);
+  const endEntryX = end.x - clamp(30 + Math.abs(corridorY - end.y) * 0.18, 28, 72);
+  const midX = (startExitX + endEntryX) / 2;
+
+  if (endEntryX - startExitX < 36) return [];
+
+  const centerPull = clamp((endEntryX - startExitX) * 0.22, 18, 52);
+  const midpoint = { x: midX, y: corridorY };
+
+  return [
+    {
+      start,
+      control1: { x: startExitX, y: start.y },
+      control2: { x: midX - centerPull, y: corridorY },
+      end: midpoint,
+    },
+    {
+      start: midpoint,
+      control1: { x: midX + centerPull, y: corridorY },
+      control2: { x: endEntryX, y: end.y },
+      end,
+    },
+  ];
+}
+
+function getBlockerBounds(blockers: LayoutNode[]) {
+  return {
     left: Math.min(...blockers.map((node) => node.x)),
     right: Math.max(...blockers.map((node) => node.x + node.width)),
     top: Math.min(...blockers.map((node) => node.y)),
     bottom: Math.max(...blockers.map((node) => node.y + node.height)),
   };
-  const blockerCenter = {
-    x: (blockerBounds.left + blockerBounds.right) / 2,
-    y: (blockerBounds.top + blockerBounds.bottom) / 2,
-  };
-  const chord = {
-    x: end.x - start.x,
-    y: end.y - start.y,
-  };
-  const normal = normalizeVector({ x: -chord.y, y: chord.x });
-  const clearance = Math.max(
-    blockerBounds.right - blockerBounds.left,
-    blockerBounds.bottom - blockerBounds.top,
-  ) / 2 + 30 + Math.abs(offset) * 0.35;
-  const detourCandidates = [1, -1].map((sign) => ({
-    x: blockerCenter.x + normal.x * clearance * sign,
-    y: blockerCenter.y + normal.y * clearance * sign,
-  }));
-  const detour = detourCandidates.sort((left, right) => {
-    const leftCost = Math.hypot(left.x - start.x, left.y - start.y) + Math.hypot(end.x - left.x, end.y - left.y);
-    const rightCost = Math.hypot(right.x - start.x, right.y - start.y) + Math.hypot(end.x - right.x, end.y - right.y);
-    return leftCost - rightCost;
-  })[0];
-  const fromStart = normalizeVector({ x: detour.x - start.x, y: detour.y - start.y });
-  const toEnd = normalizeVector({ x: end.x - detour.x, y: end.y - detour.y });
-  const startPull = clamp(Math.hypot(detour.x - start.x, detour.y - start.y) * 0.2, 24, 72);
-  const endPull = clamp(Math.hypot(end.x - detour.x, end.y - detour.y) * 0.2, 24, 72);
-  const midPull = clamp(Math.min(
-    Math.hypot(detour.x - start.x, detour.y - start.y),
-    Math.hypot(end.x - detour.x, end.y - detour.y),
-  ) * 0.18, 18, 46);
+}
+
+function rangesOverlap(startA: number, endA: number, startB: number, endB: number) {
+  return Math.max(Math.min(startA, endA), Math.min(startB, endB))
+    <= Math.min(Math.max(startA, endA), Math.max(startB, endB));
+}
+
+function collectAxisAlignedSegmentBlockers(
+  start: RoutePoint,
+  end: RoutePoint,
+  nodes: LayoutNode[],
+  sourceId: string,
+  targetId: string,
+  padding = 8,
+) {
+  const blockers = new Map<string, LayoutNode>();
+  const horizontal = Math.abs(start.y - end.y) < 0.5;
+  const vertical = Math.abs(start.x - end.x) < 0.5;
+
+  if (!horizontal && !vertical) return [];
+
+  nodes.forEach((node) => {
+    if (node.concept.id === sourceId || node.concept.id === targetId) return;
+
+    const left = node.x - padding;
+    const right = node.x + node.width + padding;
+    const top = node.y - padding;
+    const bottom = node.y + node.height + padding;
+
+    if (horizontal) {
+      if (start.y >= top && start.y <= bottom && rangesOverlap(start.x, end.x, left, right)) {
+        blockers.set(node.concept.id, node);
+      }
+      return;
+    }
+
+    if (start.x >= left && start.x <= right && rangesOverlap(start.y, end.y, top, bottom)) {
+      blockers.set(node.concept.id, node);
+    }
+  });
+
+  return Array.from(blockers.values());
+}
+
+function collapseRoutePoints(points: RoutePoint[]) {
+  const deduped = points.filter((point, index, list) => {
+    if (index === 0) return true;
+    const previous = list[index - 1];
+    return Math.abs(previous.x - point.x) > 0.5 || Math.abs(previous.y - point.y) > 0.5;
+  });
+
+  const collapsed: RoutePoint[] = [];
+
+  deduped.forEach((point) => {
+    if (collapsed.length < 2) {
+      collapsed.push(point);
+      return;
+    }
+
+    const previous = collapsed[collapsed.length - 1];
+    const beforePrevious = collapsed[collapsed.length - 2];
+    const sameVertical = Math.abs(beforePrevious.x - previous.x) < 0.5 && Math.abs(previous.x - point.x) < 0.5;
+    const sameHorizontal = Math.abs(beforePrevious.y - previous.y) < 0.5 && Math.abs(previous.y - point.y) < 0.5;
+
+    if (sameVertical || sameHorizontal) {
+      collapsed[collapsed.length - 1] = point;
+      return;
+    }
+
+    collapsed.push(point);
+  });
+
+  return collapsed;
+}
+
+function collectPolylineBlockers(
+  points: RoutePoint[],
+  nodes: LayoutNode[],
+  sourceId: string,
+  targetId: string,
+) {
+  const blockers = new Map<string, LayoutNode>();
+
+  for (let index = 1; index < points.length; index += 1) {
+    collectAxisAlignedSegmentBlockers(points[index - 1], points[index], nodes, sourceId, targetId)
+      .forEach((node) => blockers.set(node.concept.id, node));
+  }
+
+  return Array.from(blockers.values());
+}
+
+function getPolylineLength(points: RoutePoint[]) {
+  let length = 0;
+
+  for (let index = 1; index < points.length; index += 1) {
+    length += Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y);
+  }
+
+  return length;
+}
+
+function buildRoundedPolylinePath(points: RoutePoint[], baseRadius: number) {
+  if (points.length < 2) return '';
+
+  const collapsed = collapseRoutePoints(points);
+  if (collapsed.length < 2) return '';
+
+  let path = `M ${collapsed[0].x} ${collapsed[0].y}`;
+
+  for (let index = 1; index < collapsed.length; index += 1) {
+    const current = collapsed[index];
+
+    if (index === collapsed.length - 1) {
+      path += ` L ${current.x} ${current.y}`;
+      continue;
+    }
+
+    const previous = collapsed[index - 1];
+    const next = collapsed[index + 1];
+    const incoming = {
+      x: current.x - previous.x,
+      y: current.y - previous.y,
+    };
+    const outgoing = {
+      x: next.x - current.x,
+      y: next.y - current.y,
+    };
+    const incomingLength = getVectorLength(incoming);
+    const outgoingLength = getVectorLength(outgoing);
+
+    if (incomingLength < 1 || outgoingLength < 1) {
+      path += ` L ${current.x} ${current.y}`;
+      continue;
+    }
+
+    const incomingUnit = normalizeVector(incoming);
+    const outgoingUnit = normalizeVector(outgoing);
+    const aligned = Math.abs(incomingUnit.x - outgoingUnit.x) < 0.001
+      && Math.abs(incomingUnit.y - outgoingUnit.y) < 0.001;
+
+    if (aligned) {
+      path += ` L ${current.x} ${current.y}`;
+      continue;
+    }
+
+    const radius = Math.min(baseRadius, incomingLength / 2, outgoingLength / 2);
+    const cornerStart = {
+      x: current.x - incomingUnit.x * radius,
+      y: current.y - incomingUnit.y * radius,
+    };
+    const cornerEnd = {
+      x: current.x + outgoingUnit.x * radius,
+      y: current.y + outgoingUnit.y * radius,
+    };
+
+    path += ` L ${cornerStart.x} ${cornerStart.y}`;
+    path += ` Q ${current.x} ${current.y}, ${cornerEnd.x} ${cornerEnd.y}`;
+  }
+
+  return path;
+}
+
+function buildSmoothCorridorPath(points: RoutePoint[]) {
+  const collapsed = collapseRoutePoints(points);
+  if (collapsed.length < 4) return '';
+
+  const start = collapsed[0];
+  const startPort = collapsed[1];
+  const risePoint = collapsed[2];
+  const dropPoint = collapsed[collapsed.length - 3];
+  const endPort = collapsed[collapsed.length - 2];
+  const end = collapsed[collapsed.length - 1];
+
+  const hasHorizontalPorts = Math.abs(start.y - startPort.y) < 0.5
+    && Math.abs(end.y - endPort.y) < 0.5;
+  const hasVerticalLift = Math.abs(risePoint.x - startPort.x) < 0.5
+    && Math.abs(dropPoint.x - endPort.x) < 0.5;
+  const sameCorridor = Math.abs(risePoint.y - dropPoint.y) < 0.5;
+
+  if (!hasHorizontalPorts || !hasVerticalLift || !sameCorridor) {
+    return '';
+  }
+
+  const corridorY = risePoint.y;
+  const liftAmount = Math.abs(corridorY - startPort.y);
+  const corridorWidth = endPort.x - startPort.x;
+
+  if (corridorWidth <= 24) return '';
+  if (liftAmount < 1) {
+    return `M ${start.x} ${start.y} L ${startPort.x} ${startPort.y} L ${endPort.x} ${endPort.y} L ${end.x} ${end.y}`;
+  }
+
+  const maxSweep = Math.max(16, corridorWidth / 2 - 14);
+  const baseSweep = Math.min(maxSweep, 84, liftAmount * 1.18 + 20);
+  const entryEndX = Math.min(startPort.x + baseSweep, endPort.x - 28);
+  const exitStartX = Math.max(endPort.x - baseSweep, startPort.x + 28);
+
+  if (exitStartX <= entryEndX + 12) {
+    return '';
+  }
+
+  const entryControlSpan = entryEndX - startPort.x;
+  const exitControlSpan = endPort.x - exitStartX;
+  const entryEnd = { x: entryEndX, y: corridorY };
+  const exitStart = { x: exitStartX, y: corridorY };
 
   return [
     `M ${start.x} ${start.y}`,
-    `C ${offsetPoint(start, startAnchor.normal, startPull).x} ${offsetPoint(start, startAnchor.normal, startPull).y}, ${offsetPoint(detour, fromStart, -midPull).x} ${offsetPoint(detour, fromStart, -midPull).y}, ${detour.x} ${detour.y}`,
-    `C ${offsetPoint(detour, toEnd, midPull).x} ${offsetPoint(detour, toEnd, midPull).y}, ${offsetPoint(end, endAnchor.normal, endPull).x} ${offsetPoint(end, endAnchor.normal, endPull).y}, ${end.x} ${end.y}`,
+    `L ${startPort.x} ${startPort.y}`,
+    `C ${startPort.x + entryControlSpan * 0.42} ${startPort.y}, ${startPort.x + entryControlSpan * 0.64} ${corridorY}, ${entryEnd.x} ${entryEnd.y}`,
+    `L ${exitStart.x} ${exitStart.y}`,
+    `C ${exitStart.x + exitControlSpan * 0.36} ${corridorY}, ${exitStart.x + exitControlSpan * 0.58} ${endPort.y}, ${endPort.x} ${endPort.y}`,
+    `L ${end.x} ${end.y}`,
   ].join(' ');
+}
+
+function buildLocalDetourPath(
+  sourceId: string,
+  targetId: string,
+  nodes: LayoutNode[],
+  offset: number,
+  blockers: LayoutNode[],
+  startAnchor: NodeAnchor,
+  endAnchor: NodeAnchor,
+) {
+  const start = startAnchor.point;
+  const end = endAnchor.point;
+  const portDistance = 28 + Math.abs(offset) * 0.18;
+  const startPort = offsetPoint(start, startAnchor.normal, portDistance);
+  const endPort = offsetPoint(end, endAnchor.normal, portDistance);
+  const blockerBounds = getBlockerBounds(blockers);
+  const routeSpread = clamp(offset * 0.82, -26, 26);
+  const arcMargin = 16 + Math.abs(offset) * 0.22;
+  const arcFactors = [0.46, 0.64, 0.84, 1.08, 1.36, 1.72, 2.16, 2.68];
+  const arcCandidates = arcFactors.flatMap((factor) => ([
+    {
+      side: 'top' as const,
+      segments: buildSoftDetourSegments(
+        startAnchor,
+        endAnchor,
+        blockerBounds.top - arcMargin * factor + routeSpread,
+      ),
+    },
+    {
+      side: 'bottom' as const,
+      segments: buildSoftDetourSegments(
+        startAnchor,
+        endAnchor,
+        blockerBounds.bottom + arcMargin * factor + routeSpread,
+      ),
+    },
+  ])).map((candidate) => {
+    const candidateBlockers = collectBlockingNodesForSegments(
+      candidate.segments,
+      nodes,
+      sourceId,
+      targetId,
+      2,
+    );
+    const routeSign = Math.sign(offset);
+    const sidePenalty = routeSign < 0
+      ? (candidate.side === 'bottom' ? 28 : 0)
+      : routeSign > 0
+        ? (candidate.side === 'top' ? 28 : 0)
+        : 0;
+    const spanCost = candidate.segments.reduce((sum, segment) => sum + estimateSegmentSpan(segment), 0);
+
+    return {
+      blockers: candidateBlockers,
+      path: buildPathFromCubicSegments(candidate.segments),
+      sidePenalty,
+      spanCost,
+    };
+  }).filter((candidate) => candidate.path.length > 0)
+    .sort((left, right) => (
+      left.blockers.length * 1000
+      + left.sidePenalty
+      + left.spanCost * 0.08
+    ) - (
+      right.blockers.length * 1000
+      + right.sidePenalty
+      + right.spanCost * 0.08
+    ));
+
+  const clearArc = arcCandidates.find((candidate) => candidate.blockers.length === 0);
+  if (clearArc) {
+    return clearArc.path;
+  }
+  return arcCandidates[0]?.path ?? buildCubicPath({
+    start,
+    control1: startPort,
+    control2: endPort,
+    end,
+  });
 }
 
 function buildRelationPath(
@@ -533,37 +847,21 @@ function buildRelationPath(
   }
 
   const routeOffset = routeMeta.offset;
-  const sameStage = sourceStageIndex === targetStageIndex;
-  const forward = sourceStageIndex <= targetStageIndex;
-  const sourceSides = getCandidateSides(source, target, 'source', forward);
-  const targetSides = getCandidateSides(target, source, 'target', forward);
+  const startAnchor = getNodeAnchor(source, 'right', routeOffset);
+  const endAnchor = getNodeAnchor(target, 'left', -routeOffset * 0.75);
+  const segment = buildDirectRelationSegment(source, target, true, routeOffset, 'right', 'left');
+  const blockers = collectBlockingNodes(segment, nodes, source.concept.id, target.concept.id);
 
-  const candidates = sourceSides.flatMap((startSide, startIndex) => (
-    targetSides.map((endSide, endIndex) => {
-      const segment = buildDirectRelationSegment(source, target, forward, routeOffset, startSide, endSide);
-      const blockers = collectBlockingNodes(segment, nodes, source.concept.id, target.concept.id);
-      return {
-        blockers,
-        endAnchor: getNodeAnchor(target, endSide, -routeOffset * 0.75),
-        endIndex,
-        segment,
-        startAnchor: getNodeAnchor(source, startSide, routeOffset),
-        startIndex,
-        weight: blockers.length * 1000 + startIndex * 10 + endIndex * 6 + (sameStage && startSide === endSide ? 24 : 0),
-      };
-    })
-  )).sort((left, right) => left.weight - right.weight);
-
-  const best = candidates[0];
-  if (!best) return '';
-  if (best.blockers.length === 0) return buildCubicPath(best.segment);
+  if (blockers.length === 0) return buildCubicPath(segment);
 
   return buildLocalDetourPath(
-    best.segment,
+    source.concept.id,
+    target.concept.id,
+    nodes,
     routeOffset,
-    best.blockers,
-    best.startAnchor,
-    best.endAnchor,
+    blockers,
+    startAnchor,
+    endAnchor,
   );
 }
 
@@ -1460,7 +1758,9 @@ export default function KnowledgeMap() {
                     )}
                   </div>
                   <h2 className="mt-4 font-display text-[28px] leading-[1.1] tracking-tight-display text-ink">
-                    {current?.curriculum.at(-1) ?? '개념을 선택해 주세요'}
+                    {current
+                      ? (current.curriculum.length > 0 ? current.curriculum.join(' · ') : current.id)
+                      : '개념을 선택해 주세요'}
                   </h2>
                   <p className="mt-3 text-[14px] leading-[1.7] text-ink-muted">
                     {current ? `${current.schoolLevel} ${current.grade} · ${current.subject}` : '현재 선택된 개념이 없습니다.'}
