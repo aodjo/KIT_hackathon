@@ -72,8 +72,6 @@ type TextBlockLayout = {
   lineHeight: number;
 };
 
-const DEFAULT_CONCEPT_ID = 'D29';
-const EXAMPLE_CONCEPT_IDS = ['D23', 'D29', 'C17', 'P14'];
 const SUBJECT_ORDER = ['수와 연산', '도형과 측정', '변화와 관계', '자료와 가능성'] as const;
 const STAGE_ORDER = [
   { schoolLevel: '초등학교', grade: '1학년', label: '초1' },
@@ -1519,17 +1517,13 @@ export default function KnowledgeMap() {
   const [searchParams, setSearchParams] = useSearchParams();
   const conceptIdParam = searchParams.get('conceptId')?.trim().toUpperCase() ?? '';
   const questionIdParam = searchParams.get('questionId')?.trim() ?? '';
-  const [inputValue, setInputValue] = useState(conceptIdParam || DEFAULT_CONCEPT_ID);
+  const [inputValue, setInputValue] = useState('');
   const [graph, setGraph] = useState<KnowledgeMapGraph | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (conceptIdParam) {
-      setInputValue(conceptIdParam);
-    } else if (!questionIdParam) {
-      setInputValue(DEFAULT_CONCEPT_ID);
-    }
+    setInputValue('');
   }, [conceptIdParam, questionIdParam]);
 
   const focusGraphConcept = (conceptId: string) => {
@@ -1570,14 +1564,37 @@ export default function KnowledgeMap() {
           const nextGraph = await fetchQuestionCurriculumGraph(questionId);
           if (!cancelled) {
             setGraph(nextGraph);
-            if (nextGraph.concept?.id) {
-              setInputValue(nextGraph.concept.id);
-            }
           }
           return;
         }
 
-        const conceptId = (conceptIdParam || DEFAULT_CONCEPT_ID).toUpperCase();
+        const conceptId = conceptIdParam.toUpperCase();
+
+        if (!conceptId) {
+          if (graph?.concepts.length) {
+            if (!cancelled) {
+              setGraph((prev) => {
+                if (!prev) return prev;
+                if (!prev.concept && !prev.question) return prev;
+                return {
+                  ...prev,
+                  concept: null,
+                  question: undefined,
+                };
+              });
+              setError(null);
+              setLoading(false);
+            }
+            return;
+          }
+
+          setLoading(true);
+          setError(null);
+          const nextGraph = await fetchCurriculumGraph();
+          if (!cancelled) setGraph(nextGraph);
+          return;
+        }
+
         const cachedConcept = graph?.concepts.find((concept) => concept.id === conceptId);
 
         if (cachedConcept) {
@@ -1620,7 +1637,11 @@ export default function KnowledgeMap() {
   const submitInput = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextValue = inputValue.trim();
-    const nextConceptId = (nextValue || DEFAULT_CONCEPT_ID).toUpperCase();
+    if (!nextValue) {
+      setError('개념 ID를 입력해 주세요.');
+      return;
+    }
+    const nextConceptId = nextValue.toUpperCase();
     focusGraphConcept(nextConceptId);
     setSearchParams({ conceptId: nextConceptId });
   };
@@ -1699,21 +1720,6 @@ export default function KnowledgeMap() {
                   </button>
                 </form>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {EXAMPLE_CONCEPT_IDS.map((conceptId) => (
-                    <button
-                      key={conceptId}
-                      type="button"
-                      onClick={() => {
-                        focusGraphConcept(conceptId);
-                        setSearchParams({ conceptId });
-                      }}
-                      className="cursor-pointer rounded-full border border-grain bg-paper px-3 py-1.5 font-mono text-[11px] text-ink-muted transition-colors hover:border-ink/30 hover:text-ink"
-                    >
-                      {conceptId}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <div className="rounded-[28px] border border-grain bg-paper/88 p-6 shadow-[0_14px_38px_rgba(40,38,34,0.06)]">
