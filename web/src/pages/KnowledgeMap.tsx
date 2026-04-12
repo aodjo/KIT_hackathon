@@ -675,13 +675,26 @@ export default function KnowledgeMap() {
     setInputValue(questionIdParam || conceptIdParam || DEFAULT_CONCEPT_ID);
   }, [conceptIdParam, questionIdParam]);
 
+  const focusGraphConcept = (conceptId: string) => {
+    setGraph((prev) => {
+      if (!prev) return prev;
+      const nextConcept = prev.concepts.find((concept) => concept.id === conceptId);
+      if (!nextConcept) return prev;
+      if (prev.concept?.id === nextConcept.id && !prev.question) return prev;
+      return {
+        ...prev,
+        concept: nextConcept,
+        question: undefined,
+      };
+    });
+    setError(null);
+    setLoading(false);
+  };
+
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
-      setLoading(true);
-      setError(null);
-
       try {
         if (questionIdParam) {
           const questionId = Number(questionIdParam);
@@ -689,17 +702,49 @@ export default function KnowledgeMap() {
             throw new Error('유효한 문항 ID를 입력해 주세요.');
           }
 
+          if (graph?.question?.id === questionId) {
+            setError(null);
+            setLoading(false);
+            return;
+          }
+
+          setLoading(true);
+          setError(null);
           const nextGraph = await fetchQuestionCurriculumGraph(questionId);
           if (!cancelled) setGraph(nextGraph);
           return;
         }
 
         const conceptId = (conceptIdParam || DEFAULT_CONCEPT_ID).toUpperCase();
+        const cachedConcept = graph?.concepts.find((concept) => concept.id === conceptId);
+
+        if (cachedConcept) {
+          if (!cancelled) {
+            setGraph((prev) => {
+              if (!prev) return prev;
+              if (prev.concept?.id === cachedConcept.id && !prev.question) return prev;
+              return {
+                ...prev,
+                concept: cachedConcept,
+                question: undefined,
+              };
+            });
+            setError(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (graph?.concepts.length) {
+          throw new Error(`개념 ID ${conceptId}를 찾을 수 없습니다.`);
+        }
+
+        setLoading(true);
+        setError(null);
         const nextGraph = await fetchCurriculumGraph(conceptId);
         if (!cancelled) setGraph(nextGraph);
       } catch (nextError) {
         if (cancelled) return;
-        setGraph(null);
         setError(nextError instanceof Error ? nextError.message : '개념 지도를 불러오지 못했습니다.');
       } finally {
         if (!cancelled) setLoading(false);
@@ -708,7 +753,7 @@ export default function KnowledgeMap() {
 
     load();
     return () => { cancelled = true; };
-  }, [conceptIdParam, questionIdParam]);
+  }, [conceptIdParam, graph, questionIdParam]);
 
   const submitInput = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -723,11 +768,14 @@ export default function KnowledgeMap() {
       return;
     }
 
-    setSearchParams({ conceptId: (nextValue || DEFAULT_CONCEPT_ID).toUpperCase() });
+    const nextConceptId = (nextValue || DEFAULT_CONCEPT_ID).toUpperCase();
+    focusGraphConcept(nextConceptId);
+    setSearchParams({ conceptId: nextConceptId });
   };
 
   const focusConcept = (conceptId: string) => {
     setMode('concept');
+    focusGraphConcept(conceptId);
     setSearchParams({ conceptId });
   };
 
@@ -806,6 +854,7 @@ export default function KnowledgeMap() {
                     type="button"
                     onClick={() => {
                       setMode('concept');
+                      focusGraphConcept(conceptId);
                       setSearchParams({ conceptId });
                     }}
                     className="cursor-pointer rounded-full border border-grain bg-paper px-3 py-1.5 font-mono text-[11px] text-ink-muted transition-colors hover:border-ink/30 hover:text-ink"
