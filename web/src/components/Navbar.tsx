@@ -45,15 +45,6 @@ export default function Navbar() {
       <div className="mx-auto max-w-7xl px-6 lg:px-10 h-16 flex items-center justify-between">
         <Logo />
 
-        {!user && (
-          <nav className="hidden md:flex items-center gap-10 text-[13px] text-ink-muted">
-            <a href="#concept" className="hover:text-ink transition-colors">컨셉</a>
-            <a href="#features" className="hover:text-ink transition-colors">기능</a>
-            <Link to="/articles" className="hover:text-ink transition-colors">아티클</Link>
-            <a href="#demo" className="hover:text-ink transition-colors">데모</a>
-          </nav>
-        )}
-
         <div className="flex items-center gap-3">
           {user ? (
             <div className="relative" ref={dropdownRef}>
