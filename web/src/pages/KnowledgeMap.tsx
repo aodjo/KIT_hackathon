@@ -90,6 +90,34 @@ function compareConcepts(left: CurriculumConcept, right: CurriculumConcept) {
   return left.id.localeCompare(right.id, 'ko-KR');
 }
 
+function wrapText(text: string, maxChars: number, maxLines: number) {
+  const chars = Array.from(text.trim());
+  if (chars.length === 0) return [];
+
+  const lines: string[] = [];
+  let index = 0;
+
+  while (index < chars.length && lines.length < maxLines) {
+    const remaining = chars.length - index;
+    const take = Math.min(maxChars, remaining);
+    lines.push(chars.slice(index, index + take).join(''));
+    index += take;
+  }
+
+  if (index < chars.length && lines.length > 0) {
+    const last = Array.from(lines[lines.length - 1]);
+    lines[lines.length - 1] = `${last.slice(0, Math.max(0, last.length - 1)).join('')}…`;
+  }
+
+  return lines;
+}
+
+function ellipsize(text: string, maxChars: number) {
+  const chars = Array.from(text);
+  if (chars.length <= maxChars) return text;
+  return `${chars.slice(0, Math.max(0, maxChars - 1)).join('')}…`;
+}
+
 function buildAdjacency(relations: CurriculumRelation[]) {
   const adjacency = new Map<string, Set<string>>();
 
@@ -265,10 +293,10 @@ function KnowledgeGraph({
   };
 
   const isUiControlTarget = (target: EventTarget | null) =>
-    target instanceof HTMLElement && Boolean(target.closest('[data-graph-control="true"]'));
+    target instanceof Element && Boolean(target.closest('[data-graph-control="true"]'));
 
   const isInteractiveTarget = (target: EventTarget | null) =>
-    target instanceof HTMLElement && Boolean(target.closest('[data-graph-control="true"], [data-graph-node="true"]'));
+    target instanceof Element && Boolean(target.closest('[data-graph-control="true"], [data-graph-node="true"]'));
 
   useEffect(() => {
     resetView();
@@ -310,79 +338,112 @@ function KnowledgeGraph({
     const contextText = `${node.concept.schoolLevel} ${node.concept.grade} · ${node.concept.subject}`;
     const detailText = node.concept.curriculum.join(', ');
     const directCount = adjacency.get(node.concept.id)?.size ?? 0;
+    const bodyLines = wrapText(
+      zoomMode === 'detail' ? detailText : title,
+      zoomMode === 'overview' ? 10 : zoomMode === 'context' ? 14 : 16,
+      zoomMode === 'overview' ? 2 : zoomMode === 'context' ? 2 : 3,
+    );
+    const background = isCurrent ? '#1c1913' : isDirectNeighbor ? '#f1e8d9' : 'rgba(255, 253, 248, 0.96)';
+    const stroke = isCurrent ? '#1c1913' : isDirectNeighbor ? 'rgba(140,111,79,0.45)' : 'rgba(188,175,154,0.9)';
+    const titleFill = isCurrent ? 'rgba(255,250,240,0.96)' : '#1f1a15';
+    const metaFill = isCurrent ? 'rgba(255,250,240,0.68)' : '#8f7f68';
+    const bodyY = zoomMode === 'overview' ? node.y + 42 : node.y + 50;
+    const contextVisible = zoomMode !== 'overview';
+    const detailVisible = zoomMode === 'detail';
 
     return (
-      <button
+      <g
         key={node.concept.id}
-        type="button"
         data-graph-node="true"
         onClick={() => !isCurrent && onSelectConcept(node.concept.id)}
-        className={`absolute overflow-hidden rounded-[24px] border text-left shadow-[0_10px_28px_rgba(40,38,34,0.08)] transition-transform ${
-          isCurrent
-            ? 'border-ink bg-ink text-paper'
-            : isDirectNeighbor
-              ? 'border-clay-deep/30 bg-[#f1e8d9] text-ink'
-              : 'border-grain bg-paper/94 text-ink hover:-translate-y-0.5 hover:border-ink/24'
-        } ${isCurrent ? 'cursor-default' : 'cursor-pointer'}`}
-        style={{
-          left: node.x,
-          top: node.y,
-          width: node.width,
-          height: node.height,
-          padding: '12px 14px',
-        }}
+        style={{ cursor: isCurrent ? 'default' : 'pointer' }}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className={`truncate font-mono text-[10px] uppercase tracking-[0.14em] ${isCurrent ? 'text-paper/68' : 'text-clay-deep'}`}>
-              {node.concept.id}
-            </p>
-            <p
-              className={`mt-1 truncate font-mono text-[9px] ${isCurrent ? 'text-paper/64' : 'text-ink-muted'}`}
-              style={{
-                opacity: zoomMode === 'overview' ? 0 : 1,
-                maxHeight: zoomMode === 'overview' ? 0 : 16,
-                overflow: 'hidden',
-              }}
+        <rect
+          x={node.x}
+          y={node.y}
+          width={node.width}
+          height={node.height}
+          rx={24}
+          fill={background}
+          stroke={stroke}
+          strokeWidth={isCurrent ? 1.8 : 1.2}
+          filter="drop-shadow(0 10px 28px rgba(40,38,34,0.08))"
+        />
+        <text
+          x={node.x + 14}
+          y={node.y + 20}
+          fill={metaFill}
+          fontFamily="var(--font-mono, monospace)"
+          fontSize="10"
+          letterSpacing="1.4"
+        >
+          {node.concept.id}
+        </text>
+        {contextVisible && (
+          <text
+            x={node.x + 14}
+            y={node.y + 33}
+            fill={metaFill}
+            fontFamily="var(--font-mono, monospace)"
+            fontSize="9"
+          >
+            {ellipsize(contextText, 26)}
+          </text>
+        )}
+        {isCurrent && (
+          <>
+            <rect
+              x={node.x + node.width - 56}
+              y={node.y + 11}
+              width={42}
+              height={18}
+              rx={9}
+              fill="rgba(255,250,240,0.08)"
+              stroke="rgba(255,250,240,0.16)"
+              strokeWidth="1"
+            />
+            <text
+              x={node.x + node.width - 35}
+              y={node.y + 23.5}
+              fill="rgba(255,250,240,0.72)"
+              fontFamily="var(--font-mono, monospace)"
+              fontSize="8.5"
+              letterSpacing="1.2"
+              textAnchor="middle"
             >
-              {contextText}
-            </p>
-          </div>
-          {isCurrent && (
-            <span className="rounded-full border border-paper/18 bg-paper/8 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-paper/70">
               Focus
-            </span>
-          )}
-        </div>
-
-        <p
-          className={`${isCurrent ? 'text-paper' : 'text-ink'} mt-2`}
-          style={{
-            fontSize: zoomMode === 'overview' ? 12.5 : zoomMode === 'context' ? 13.4 : 14.2,
-            lineHeight: zoomMode === 'overview' ? 1.35 : 1.48,
-            display: '-webkit-box',
-            WebkitLineClamp: zoomMode === 'overview' ? 2 : zoomMode === 'context' ? 2 : 3,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-            overflowWrap: 'anywhere',
-            wordBreak: 'break-word',
-            maxWidth: '100%',
-          }}
+            </text>
+          </>
+        )}
+        <text
+          x={node.x + 14}
+          y={bodyY}
+          fill={titleFill}
+          fontFamily="var(--font-display, serif)"
+          fontSize={zoomMode === 'overview' ? 12.5 : zoomMode === 'context' ? 13.4 : 14.2}
         >
-          {zoomMode === 'detail' ? detailText : title}
-        </p>
-
-        <div
-          className={`mt-2 truncate font-mono text-[9px] ${isCurrent ? 'text-paper/62' : 'text-ink-muted'}`}
-          style={{
-            opacity: zoomMode === 'detail' ? 1 : 0,
-            maxHeight: zoomMode === 'detail' ? 14 : 0,
-            overflow: 'hidden',
-          }}
-        >
-          직접 연결 {directCount}개
-        </div>
-      </button>
+          {bodyLines.map((line, index) => (
+            <tspan
+              key={`${node.concept.id}-line-${index}`}
+              x={node.x + 14}
+              dy={index === 0 ? 0 : zoomMode === 'overview' ? 16 : 18}
+            >
+              {line}
+            </tspan>
+          ))}
+        </text>
+        {detailVisible && (
+          <text
+            x={node.x + 14}
+            y={node.y + node.height - 12}
+            fill={metaFill}
+            fontFamily="var(--font-mono, monospace)"
+            fontSize="9"
+          >
+            {`직접 연결 ${directCount}개`}
+          </text>
+        )}
+      </g>
     );
   };
 
@@ -484,66 +545,87 @@ function KnowledgeGraph({
             width: sceneWidth,
             height: sceneHeight,
             transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
-            willChange: 'transform',
           }}
         >
-          {lanes.map((lane) => (
-            <div key={lane.subject}>
-              <div
-                className="absolute rounded-[28px] border border-grain/70 bg-paper/40"
-                style={{
-                  left: 146,
-                  top: lane.y,
-                  width: sceneWidth - 210,
-                  height: lane.height,
-                }}
-              />
-              <div
-                className="absolute flex items-center justify-end pr-8"
-                style={{ left: 0, top: lane.y, width: 170, height: lane.height }}
-              >
-                <span className="font-display text-[26px] leading-none tracking-tight-display text-ink">
-                  {lane.subject}
-                </span>
-              </div>
-            </div>
-          ))}
-
-          {stages.map((stage) => (
-            <div key={stage.key}>
-              <div
-                className="absolute rounded-[26px] border border-grain/70 bg-paper/54"
-                style={{
-                  left: stage.x,
-                  top: 20,
-                  width: stage.width,
-                  height: 74,
-                }}
-              />
-              <div
-                className="absolute flex flex-col items-center justify-center"
-                style={{
-                  left: stage.x,
-                  top: 20,
-                  width: stage.width,
-                  height: 74,
-                }}
-              >
-                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-clay-deep">
-                  {stage.schoolLevel}
-                </span>
-                <span className="mt-2 font-display text-[24px] leading-none tracking-tight-display text-ink">
-                  {stage.label}
-                </span>
-              </div>
-            </div>
-          ))}
-
           <svg
             width={sceneWidth}
             height={sceneHeight}
-            className="pointer-events-none absolute left-0 top-0 overflow-visible"
+            className="absolute left-0 top-0 overflow-visible"
           >
+            <g pointerEvents="none">
+              {lanes.map((lane) => (
+                <g key={lane.subject}>
+                  <rect
+                    x={146}
+                    y={lane.y}
+                    width={sceneWidth - 210}
+                    height={lane.height}
+                    rx={28}
+                    fill="rgba(255,253,248,0.42)"
+                    stroke="rgba(188,175,154,0.72)"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={150}
+                    y={lane.y + lane.height / 2 + 8}
+                    fill="#1f1a15"
+                    fontFamily="var(--font-display, serif)"
+                    fontSize="26"
+                    textAnchor="end"
+                  >
+                    {lane.subject}
+                  </text>
+                </g>
+              ))}
+
+              {stages.map((stage) => (
+                <g key={stage.key}>
+                  <rect
+                    x={stage.x}
+                    y={20}
+                    width={stage.width}
+                    height={74}
+                    rx={26}
+                    fill="rgba(255,253,248,0.54)"
+                    stroke="rgba(188,175,154,0.72)"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={stage.x + stage.width / 2}
+                    y={43}
+                    fill="#8f7f68"
+                    fontFamily="var(--font-mono, monospace)"
+                    fontSize="10"
+                    letterSpacing="1.8"
+                    textAnchor="middle"
+                  >
+                    {stage.schoolLevel}
+                  </text>
+                  <text
+                    x={stage.x + stage.width / 2}
+                    y={73}
+                    fill="#1f1a15"
+                    fontFamily="var(--font-display, serif)"
+                    fontSize="24"
+                    textAnchor="middle"
+                  >
+                    {stage.label}
+                  </text>
+                </g>
+              ))}
+
+              {current && nodeById.get(current.id) && (
+                <ellipse
+                  cx={nodeById.get(current.id)!.x + nodeById.get(current.id)!.width / 2}
+                  cy={nodeById.get(current.id)!.y + nodeById.get(current.id)!.height / 2}
+                  rx={140}
+                  ry={92}
+                  fill="rgba(28,25,19,0.06)"
+                />
+              )}
+
+            </g>
+            <g pointerEvents="none">
             {relations.map((relation) => {
               const source = nodeById.get(relation.sourceId);
               const target = nodeById.get(relation.targetId);
@@ -567,9 +649,11 @@ function KnowledgeGraph({
                 />
               );
             })}
+            </g>
+            <g>
+              {nodes.map(renderNode)}
+            </g>
           </svg>
-
-          {nodes.map(renderNode)}
         </div>
       </div>
     </div>
