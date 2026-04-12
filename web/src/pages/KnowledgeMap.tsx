@@ -11,7 +11,6 @@ import {
   type QuestionCurriculumGraph,
 } from '../lib/curriculumApi';
 
-type SourceMode = 'concept' | 'question';
 type ZoomMode = 'overview' | 'context' | 'detail';
 
 type KnowledgeMapGraph = CurriculumGraph & {
@@ -1520,15 +1519,17 @@ export default function KnowledgeMap() {
   const [searchParams, setSearchParams] = useSearchParams();
   const conceptIdParam = searchParams.get('conceptId')?.trim().toUpperCase() ?? '';
   const questionIdParam = searchParams.get('questionId')?.trim() ?? '';
-  const [mode, setMode] = useState<SourceMode>(questionIdParam ? 'question' : 'concept');
-  const [inputValue, setInputValue] = useState(questionIdParam || conceptIdParam || DEFAULT_CONCEPT_ID);
+  const [inputValue, setInputValue] = useState(conceptIdParam || DEFAULT_CONCEPT_ID);
   const [graph, setGraph] = useState<KnowledgeMapGraph | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setMode(questionIdParam ? 'question' : 'concept');
-    setInputValue(questionIdParam || conceptIdParam || DEFAULT_CONCEPT_ID);
+    if (conceptIdParam) {
+      setInputValue(conceptIdParam);
+    } else if (!questionIdParam) {
+      setInputValue(DEFAULT_CONCEPT_ID);
+    }
   }, [conceptIdParam, questionIdParam]);
 
   const focusGraphConcept = (conceptId: string) => {
@@ -1567,7 +1568,12 @@ export default function KnowledgeMap() {
           setLoading(true);
           setError(null);
           const nextGraph = await fetchQuestionCurriculumGraph(questionId);
-          if (!cancelled) setGraph(nextGraph);
+          if (!cancelled) {
+            setGraph(nextGraph);
+            if (nextGraph.concept?.id) {
+              setInputValue(nextGraph.concept.id);
+            }
+          }
           return;
         }
 
@@ -1614,23 +1620,12 @@ export default function KnowledgeMap() {
   const submitInput = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextValue = inputValue.trim();
-
-    if (mode === 'question') {
-      if (!nextValue) {
-        setError('문항 ID를 입력해 주세요.');
-        return;
-      }
-      setSearchParams({ questionId: nextValue });
-      return;
-    }
-
     const nextConceptId = (nextValue || DEFAULT_CONCEPT_ID).toUpperCase();
     focusGraphConcept(nextConceptId);
     setSearchParams({ conceptId: nextConceptId });
   };
 
   const focusConcept = (conceptId: string) => {
-    setMode('concept');
     focusGraphConcept(conceptId);
     setSearchParams({ conceptId });
   };
@@ -1651,8 +1646,7 @@ export default function KnowledgeMap() {
       <Navbar />
       <main className="mx-auto max-w-[1600px] px-6 pb-20 pt-16 lg:px-10 lg:pb-24 lg:pt-20">
         <div className="flex flex-col gap-10">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
+          <div className="max-w-3xl">
               <p className="mt-8 font-mono text-[11px] uppercase tracking-[0.24em] text-clay-deep">
                 Knowledge Graph
               </p>
@@ -1662,62 +1656,6 @@ export default function KnowledgeMap() {
               <p className="mt-5 max-w-3xl font-display text-[18px] leading-[1.6] text-ink-muted">
                 모든 단원 노드를 한 화면에 배치하고, 선수 관계선을 전부 표시합니다. 현재 개념은 강조만 주고, 전체 구조 안에서 어디에 놓여 있는지 바로 읽을 수 있게 했습니다.
               </p>
-            </div>
-
-            <div className="w-full max-w-[520px] rounded-[30px] border border-grain bg-paper/86 p-4 shadow-[0_18px_48px_rgba(38,34,28,0.08)] backdrop-blur-sm">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMode('concept')}
-                  className={`flex-1 rounded-full px-4 py-3 text-[13px] cursor-pointer transition-colors ${
-                    mode === 'concept' ? 'bg-ink text-paper' : 'bg-grain-soft text-ink-muted hover:bg-grain'
-                  }`}
-                >
-                  개념 ID
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('question')}
-                  className={`flex-1 rounded-full px-4 py-3 text-[13px] cursor-pointer transition-colors ${
-                    mode === 'question' ? 'bg-ink text-paper' : 'bg-grain-soft text-ink-muted hover:bg-grain'
-                  }`}
-                >
-                  문항 ID
-                </button>
-              </div>
-
-              <form onSubmit={submitInput} className="mt-3 flex flex-col gap-3 sm:flex-row">
-                <input
-                  value={inputValue}
-                  onChange={(event) => setInputValue(event.target.value)}
-                  placeholder={mode === 'concept' ? '예: D29' : '예: 120'}
-                  className="h-12 flex-1 rounded-full border border-grain bg-paper px-5 text-[14px] text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-ink/40"
-                />
-                <button
-                  type="submit"
-                  className="h-12 cursor-pointer rounded-full bg-ink px-6 text-[13px] font-medium text-paper transition-colors hover:bg-ink-soft"
-                >
-                  불러오기
-                </button>
-              </form>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                {EXAMPLE_CONCEPT_IDS.map((conceptId) => (
-                  <button
-                    key={conceptId}
-                    type="button"
-                    onClick={() => {
-                      setMode('concept');
-                      focusGraphConcept(conceptId);
-                      setSearchParams({ conceptId });
-                    }}
-                    className="cursor-pointer rounded-full border border-grain bg-paper px-3 py-1.5 font-mono text-[11px] text-ink-muted transition-colors hover:border-ink/30 hover:text-ink"
-                  >
-                    {conceptId}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
             <section className="min-w-0">
@@ -1742,6 +1680,42 @@ export default function KnowledgeMap() {
             </section>
 
             <aside className="space-y-4">
+              <div className="rounded-[28px] border border-grain bg-paper/88 p-4 shadow-[0_14px_38px_rgba(40,38,34,0.06)] backdrop-blur-sm">
+                <p className="px-2 font-mono text-[10px] uppercase tracking-[0.2em] text-clay-deep">
+                  그래프 검색
+                </p>
+                <form onSubmit={submitInput} className="mt-3 flex flex-col gap-3">
+                  <input
+                    value={inputValue}
+                    onChange={(event) => setInputValue(event.target.value)}
+                    placeholder="예: D29"
+                    className="h-12 flex-1 rounded-full border border-grain bg-paper px-5 text-[14px] text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-ink/40"
+                  />
+                  <button
+                    type="submit"
+                    className="h-12 cursor-pointer rounded-full bg-ink px-6 text-[13px] font-medium text-paper transition-colors hover:bg-ink-soft"
+                  >
+                    불러오기
+                  </button>
+                </form>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {EXAMPLE_CONCEPT_IDS.map((conceptId) => (
+                    <button
+                      key={conceptId}
+                      type="button"
+                      onClick={() => {
+                        focusGraphConcept(conceptId);
+                        setSearchParams({ conceptId });
+                      }}
+                      className="cursor-pointer rounded-full border border-grain bg-paper px-3 py-1.5 font-mono text-[11px] text-ink-muted transition-colors hover:border-ink/30 hover:text-ink"
+                    >
+                      {conceptId}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="rounded-[28px] border border-grain bg-paper/88 p-6 shadow-[0_14px_38px_rgba(40,38,34,0.06)]">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-clay-deep">
                   선택 개념
@@ -1751,11 +1725,6 @@ export default function KnowledgeMap() {
                     <span className="rounded-full border border-grain bg-grain-soft px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-clay-deep">
                       {current?.id ?? '-'}
                     </span>
-                    {graph?.question && (
-                      <span className="rounded-full border border-grain bg-paper px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
-                        문항 {graph.question.id}
-                      </span>
-                    )}
                   </div>
                   <h2 className="mt-4 font-display text-[28px] leading-[1.1] tracking-tight-display text-ink">
                     {current
@@ -1768,7 +1737,7 @@ export default function KnowledgeMap() {
                 </div>
                 {graph?.question && (
                   <p className="mt-5 rounded-[20px] bg-grain-soft px-4 py-3 text-[13px] leading-[1.7] text-ink-muted">
-                    문항 {graph.question.id}가 가리키는 개념을 중심으로 전체 그래프를 강조했습니다.
+                    특정 문항이 가리키는 개념을 중심으로 전체 그래프를 강조했습니다.
                   </p>
                 )}
               </div>
