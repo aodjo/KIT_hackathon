@@ -8,6 +8,9 @@ Echo는 AI가 학생을 직접 가르치는 제품이 아닙니다. 학생이 AI
 ## 프로젝트 소개
 > Echo는 [KOREA IT ACADEMY 공모전](http://www.koreaitcam.net/2025/landing/vibe_coding.asp)을 위해 제작되었습니다. 이 프로젝트는 [이준성](https://junx.dev/)에 의해 개발되었습니다. 라이선스에 관한 자세한 내용은 [LICENSE](./LICENSE)를 확인하세요. 
 
+## 레포지토리 아카이빙
+> [KOREA IT ACADEMY 공모전](http://www.koreaitcam.net/2025/landing/vibe_coding.asp)이 종료됨에 따라 26. 04. 19. 이후 이 레포지토리를 아카이빙합니다. 이 프로젝트에 대해 문의가 있다면 [me@junx.dev](mailto:me@junx.dev)으로 문의 부탁드립니다.
+
 ## 사용된 AI 모델에 대해서
 > 대회를 위해 `Claude Opus 4.6` (`Claude Code 2.1.84`) 과 `ChatGPT 5.4` (`Codex-cli 0.120.0`) 를 사용했습니다.
 > 공모전 특성상 [CLAUDE.md](./CLAUDE.md)와 [ARCHITECTURE.md](./ARCHITECTURE.md) 파일은 공개합니다. 
